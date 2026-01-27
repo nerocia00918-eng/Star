@@ -145,6 +145,9 @@
                     </div>
                 </div>
                 <div class="flex gap-2">
+                    <button onclick="clearAllData()" class="flex items-center gap-1 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-red-50">
+                        <i data-lucide="trash"></i> Xóa Hết
+                    </button>
                     <button onclick="exportJSON()" class="flex items-center gap-1 bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-50">
                         <i data-lucide="download" class="w-4 h-4"></i> Xuất JSON
                     </button>
@@ -258,6 +261,10 @@
 
     <!-- JAVASCRIPT LOGIC -->
     <script>
+        // --- 0. STORAGE KEYS ---
+        const STORAGE_KEY_DB = 'printstar_db_v1';
+        const STORAGE_KEY_SETTINGS = 'printstar_settings_v1';
+
         // --- 1. CONFIG & DATA ---
         const CATEGORY_MAPPINGS = {
             'v.': { name: 'Card Màn Hình (VGA)', fields: [
@@ -454,7 +461,58 @@
         let promoColor = '#FFFF00';
         let bgNameColor = '#DC2626';
 
-        // --- 2. UTILS ---
+        // --- 2. STORAGE UTILS ---
+        function saveSystemState() {
+            // Save Data
+            localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(database));
+            
+            // Save Settings & Selection
+            const settings = {
+                selectedIds: Array.from(selectedIds),
+                printMode,
+                campaign,
+                promoColor,
+                bgNameColor
+            };
+            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+        }
+
+        function loadSystemState() {
+            // Load Data
+            const savedData = localStorage.getItem(STORAGE_KEY_DB);
+            if (savedData) {
+                try {
+                    database = JSON.parse(savedData);
+                } catch(e) { console.error('Error loading DB', e); }
+            }
+
+            // Load Settings
+            const savedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
+            if (savedSettings) {
+                try {
+                    const settings = JSON.parse(savedSettings);
+                    if (settings.selectedIds) selectedIds = new Set(settings.selectedIds);
+                    if (settings.printMode) printMode = settings.printMode;
+                    if (settings.campaign) campaign = settings.campaign;
+                    if (settings.promoColor) promoColor = settings.promoColor;
+                    if (settings.bgNameColor) bgNameColor = settings.bgNameColor;
+                    
+                    // Apply loaded settings to UI
+                    document.getElementById('sel-campaign').value = campaign;
+                    document.getElementById('color-promo').value = promoColor;
+                    document.getElementById('color-bg-name').value = bgNameColor;
+                    
+                    // Button UI update handled in setPrintMode calls later or manual update here?
+                    // Let's rely on setPrintMode visual update, or just render.
+                    // Visual update for mode buttons:
+                    document.getElementById('btn-mode-normal').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'NORMAL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+                    document.getElementById('btn-mode-small').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'SMALL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+                    
+                } catch(e) { console.error('Error loading Settings', e); }
+            }
+        }
+
+        // --- 3. UTILS ---
         const uuid = () => Math.random().toString(36).substr(2, 9);
         const formatPrice = (p) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p).replace('₫', 'đ');
         const cleanPrice = (str) => parseInt(str.toString().replace(/[^0-9]/g, ''), 10) || 0;
@@ -520,7 +578,7 @@
             };
         }
 
-        // --- 3. DOM MANIPULATION ---
+        // --- 4. DOM MANIPULATION ---
         function switchTab(tab) {
             document.getElementById('tab-database').classList.toggle('hidden', tab !== 'DATABASE');
             document.getElementById('tab-print').classList.toggle('hidden', tab !== 'PRINT');
@@ -586,6 +644,7 @@
         function toggleSelect(id) {
             if (selectedIds.has(id)) selectedIds.delete(id);
             else selectedIds.add(id);
+            saveSystemState(); // SAVE ON SELECTION CHANGE
             renderTable();
         }
 
@@ -609,6 +668,7 @@
             } else {
                 filtered.forEach(p => selectedIds.delete(p.id));
             }
+            saveSystemState(); // SAVE ON BULK SELECTION
             renderTable();
         }
 
@@ -616,11 +676,22 @@
             document.getElementById('selected-count-badge').textContent = selectedIds.size;
         }
 
-        // --- 4. PRINT LOGIC ---
+        function clearAllData() {
+            if(confirm("Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu? Hành động này không thể hoàn tác.")) {
+                database = [];
+                selectedIds.clear();
+                saveSystemState();
+                renderTable();
+                showToast("Đã xóa toàn bộ dữ liệu", "success");
+            }
+        }
+
+        // --- 5. PRINT LOGIC ---
         function setPrintMode(mode) {
             printMode = mode;
             document.getElementById('btn-mode-normal').className = `p-2 rounded border text-sm font-bold transition-all ${mode === 'NORMAL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
             document.getElementById('btn-mode-small').className = `p-2 rounded border text-sm font-bold transition-all ${mode === 'SMALL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+            saveSystemState(); // SAVE SETTING
             renderPrintArea();
         }
 
@@ -628,6 +699,7 @@
             campaign = document.getElementById('sel-campaign').value;
             promoColor = document.getElementById('color-promo').value;
             bgNameColor = document.getElementById('color-bg-name').value;
+            saveSystemState(); // SAVE SETTING
             renderPrintArea();
         }
 
@@ -783,7 +855,7 @@
             </div>`;
         }
 
-        // --- 5. MODALS & ACTIONS ---
+        // --- 6. MODALS & ACTIONS ---
         function openEditModal(id) {
             const p = database.find(x => x.id === id);
             if (!p) return;
@@ -846,6 +918,7 @@
             });
 
             closeModal();
+            saveSystemState(); // SAVE AFTER EDIT
             renderTable();
             // Important: Re-render print area if we are editing
             renderPrintArea(); 
@@ -871,11 +944,12 @@
             database = database.filter(p => p.id !== id);
             selectedIds.delete(id);
             closeModal();
+            saveSystemState(); // SAVE AFTER DELETE
             renderTable();
             showToast('Đã xóa sản phẩm', 'success');
         }
 
-        // --- 6. IMPORT/EXPORT ---
+        // --- 7. IMPORT/EXPORT ---
         document.getElementById('add-form').addEventListener('submit', (e) => {
             e.preventDefault();
             const code = document.getElementById('inp-code').value;
@@ -896,6 +970,7 @@
             
             // Reset form
             document.getElementById('add-form').reset();
+            saveSystemState(); // SAVE AFTER ADD
             renderTable();
             showToast('Đã thêm sản phẩm mới');
         });
@@ -917,6 +992,7 @@
             
             document.getElementById('bulk-textarea').value = '';
             toggleBulkImport();
+            saveSystemState(); // SAVE AFTER BULK IMPORT
             renderTable();
             showToast(`Đã nhập ${newItems.length} sản phẩm`);
         }
@@ -942,6 +1018,7 @@
                     if (Array.isArray(json)) {
                         database = [...json, ...database];
                         json.forEach(p => selectedIds.add(p.id));
+                        saveSystemState(); // SAVE AFTER JSON IMPORT
                         renderTable();
                         showToast(`Đã nhập ${json.length} sản phẩm từ file`);
                     }
@@ -953,7 +1030,7 @@
             input.value = '';
         }
 
-        // --- 7. PDF EXPORT ---
+        // --- 8. PDF EXPORT ---
         async function exportToPDF() {
             const printArea = document.getElementById('print-area');
             if (!printArea || printArea.children.length === 0) {
@@ -998,7 +1075,10 @@
 
         // Init
         window.addEventListener('DOMContentLoaded', () => {
-            // Sample Data
+            // LOAD FROM STORAGE
+            loadSystemState();
+
+            // Fallback: If no data loaded, show samples
             if(database.length === 0) {
                 ["LT.AC.NL16-71G-71UJ", "V.GIGA.3060"].forEach(c => {
                     const p = generateProduct(c);
