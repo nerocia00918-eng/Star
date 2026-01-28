@@ -1219,12 +1219,39 @@ async function exportToPDF() {
                     format: 'a4'
                 });
 
-                const imgWidth = 210;
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                <script>
+async function exportToPDF() {
+    const { jsPDF } = window.jspdf;
+    const printArea = document.getElementById("print-area");
 
-                pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
-                pdf.save(`PrintStar_${new Date().getTime()}.pdf`);
-                showToast('Xuất PDF thành công!');
+    if (!printArea || printArea.children.length === 0) {
+        showToast("Không có nội dung để xuất PDF", "error");
+        return;
+    }
+
+    const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+    });
+
+    await pdf.html(printArea, {
+        x: 5,
+        y: 5,
+        width: 200,
+        windowWidth: 1200,
+        autoPaging: "text",
+        html2canvas: {
+            scale: 1,
+            useCORS: true,
+            allowTaint: true
+        }
+    });
+
+    pdf.save(`PrintStar_${Date.now()}.pdf`);
+}
+</script>
+
             } catch (err) {
                 console.error(err);
                 showToast('Lỗi khi tạo PDF', 'error');
