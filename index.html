@@ -46,10 +46,10 @@
 <script type="importmap">
 {
   "imports": {
+    "react/": "https://esm.sh/react@^19.2.4/",
     "react": "https://esm.sh/react@^19.2.4",
-    "qrcode.react": "https://esm.sh/qrcode.react@^4.2.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "react/": "https://esm.sh/react@^19.2.4/"
+    "qrcode.react": "https://esm.sh/qrcode.react@^4.2.0"
   }
 }
 </script>
@@ -61,7 +61,7 @@
 
     <!-- CONFIRM/EDIT MODAL OVERLAY -->
     <div id="modal-overlay" class="fixed inset-0 bg-black/50 z-[5000] hidden flex items-center justify-center no-print backdrop-blur-sm">
-        <div id="modal-content" class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 transform transition-all scale-100">
+        <div id="modal-content" class="bg-white rounded-xl shadow-2xl w-full max-w-4xl mx-4 transform transition-all scale-100">
             <!-- Content injected via JS -->
         </div>
     </div>
@@ -128,12 +128,18 @@
 
             <!-- Toolbar -->
             <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-                <div class="flex items-center gap-4 w-full md:w-auto">
-                    <button onclick="toggleBulkImport()" class="text-indigo-600 font-bold text-sm hover:underline flex items-center gap-1 whitespace-nowrap">
-                        <i data-lucide="file-text" class="w-4 h-4"></i> <span id="bulk-btn-text">Hiện nhập liệu hàng loạt</span>
+                <div class="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+                    <button onclick="toggleBulkImport()" class="text-indigo-600 font-bold text-sm hover:underline flex items-center gap-1 whitespace-nowrap bg-indigo-50 px-3 py-2 rounded-lg border border-indigo-100">
+                        <i data-lucide="layout-grid" class="w-4 h-4"></i> <span id="bulk-btn-text">Nhập hàng loạt (4 Cột)</span>
                     </button>
+                    
+                    <!-- NEW: Quick Select Button -->
+                    <button onclick="openQuickSelectModal()" class="text-purple-700 font-bold text-sm hover:bg-purple-100 flex items-center gap-1 whitespace-nowrap bg-purple-50 px-3 py-2 rounded-lg border border-purple-200 shadow-sm transition-all hover:shadow-md">
+                        <i data-lucide="list-checks" class="w-4 h-4"></i> Chọn theo List để in
+                    </button>
+
                     <!-- Search with Mode Selection -->
-                    <div class="flex flex-1 gap-2 md:w-96">
+                    <div class="flex flex-1 gap-2 min-w-[300px]">
                         <select id="search-mode" onchange="renderTable()" class="border border-gray-300 rounded-lg px-2 text-sm bg-white focus:outline-none focus:border-blue-500 cursor-pointer">
                             <option value="contains">Có chứa</option>
                             <option value="starts_with">Bắt đầu bằng</option>
@@ -158,11 +164,34 @@
                 </div>
             </div>
 
-            <!-- Bulk Import Area -->
+            <!-- Bulk Import Area (Split Columns) -->
             <div id="bulk-import-area" class="hidden bg-indigo-50 p-4 rounded-xl border border-indigo-100 transition-all">
-                <p class="text-xs text-indigo-700 mb-2 font-bold">Định dạng: Mã [Tab] Tên [Tab] Giá [Tab] Link</p>
-                <textarea id="bulk-textarea" class="w-full h-32 p-3 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 font-mono text-sm" placeholder="Paste dữ liệu Excel vào đây..."></textarea>
-                <button onclick="processBulkImport()" class="mt-2 bg-indigo-600 text-white px-4 py-2 rounded font-bold text-sm hover:bg-indigo-700">Xử lý nhập liệu</button>
+                <p class="text-xs text-indigo-700 mb-2 font-bold flex items-center gap-2">
+                    <i data-lucide="info"></i> Copy từng cột trong Excel và dán vào các ô tương ứng. Hệ thống sẽ tự ghép theo từng dòng.
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">1. Cột Mã SP (*)</label>
+                        <textarea id="bulk-codes" class="w-full h-40 p-2 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 font-mono text-xs whitespace-pre" placeholder="V.GIGA.3060&#10;MO.LOGI..."></textarea>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">2. Cột Tên SP</label>
+                        <textarea id="bulk-names" class="w-full h-40 p-2 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 font-mono text-xs whitespace-pre" placeholder="VGA Gigabyte...&#10;Chuột Logi..."></textarea>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">3. Cột Giá</label>
+                        <textarea id="bulk-prices" class="w-full h-40 p-2 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 font-mono text-xs whitespace-pre" placeholder="500000&#10;100000..."></textarea>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">4. Cột Link</label>
+                        <textarea id="bulk-links" class="w-full h-40 p-2 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 font-mono text-xs whitespace-pre" placeholder="https://...&#10;https://..."></textarea>
+                    </div>
+                </div>
+                <div class="mt-3 flex justify-end">
+                    <button onclick="processBulkImport()" class="bg-indigo-600 text-white px-6 py-2 rounded font-bold text-sm hover:bg-indigo-700 flex items-center gap-2">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i> Xử lý & Nhập liệu
+                    </button>
+                </div>
             </div>
 
             <!-- Data Table -->
@@ -502,8 +531,6 @@
                     document.getElementById('color-promo').value = promoColor;
                     document.getElementById('color-bg-name').value = bgNameColor;
                     
-                    // Button UI update handled in setPrintMode calls later or manual update here?
-                    // Let's rely on setPrintMode visual update, or just render.
                     // Visual update for mode buttons:
                     document.getElementById('btn-mode-normal').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'NORMAL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
                     document.getElementById('btn-mode-small').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'SMALL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
@@ -547,9 +574,10 @@
             document.getElementById('modal-overlay').classList.add('hidden');
         }
 
-        function generateProduct(codeLine) {
-            const parts = codeLine.split('\t');
-            const code = parts[0]?.trim() || '';
+        function generateProduct(code, name, price, link) {
+            code = code?.trim() || '';
+            if(!code) return null;
+
             const lowerCode = code.toLowerCase();
             let prefix = 'default';
             
@@ -563,15 +591,15 @@
             }
 
             const config = CATEGORY_MAPPINGS[prefix] || CATEGORY_MAPPINGS['default'];
-            const price = parts[2] ? cleanPrice(parts[2]) : (Math.floor(Math.random() * 50) * 100000 + 500000);
+            const finalPrice = price ? cleanPrice(price) : (Math.floor(Math.random() * 50) * 100000 + 500000);
             
             return {
                 id: uuid(),
                 code: code,
-                name: parts[1]?.trim() || `${config.name} - ${code.toUpperCase()}`,
-                price: price,
-                salePrice: price * 0.9,
-                link: parts[3]?.trim() || `https://tinhocngoisao.com/search?q=${code}`,
+                name: name?.trim() || `${config.name} - ${code.toUpperCase()}`,
+                price: finalPrice,
+                salePrice: finalPrice * 0.9,
+                link: link?.trim() || `https://tinhocngoisao.com/search?q=${code}`,
                 specs: config.fields.map(f => ({ ...f, value: f.default })),
                 warranty: '12 Tháng',
                 campaignName: ''
@@ -896,6 +924,95 @@
             showModal(html);
         }
 
+        // --- NEW: QUICK SELECT MODAL ---
+        function openQuickSelectModal() {
+            const html = `
+                <div class="flex justify-between items-center p-4 border-b">
+                    <h2 class="text-xl font-bold text-purple-700 flex items-center gap-2">
+                        <i data-lucide="list-checks" class="w-6 h-6"></i> Chọn nhanh để in
+                    </h2>
+                    <button onclick="closeModal()"><i data-lucide="x"></i></button>
+                </div>
+                <div class="p-6">
+                    <p class="text-sm text-gray-600 mb-2 font-bold">Dán danh sách mã sản phẩm cần in vào đây (mỗi mã 1 dòng hoặc cách nhau bằng dấu phẩy):</p>
+                    <textarea id="quick-select-input" class="w-full h-48 border border-purple-200 p-3 rounded focus:ring-2 focus:ring-purple-500 focus:outline-none font-mono text-sm bg-purple-50" placeholder="V.GIGA.3060&#10;MO.LOGITECH.G102..."></textarea>
+                    <div class="flex items-center gap-2 mt-3">
+                         <input type="checkbox" id="keep-current-selection" class="rounded text-purple-600 focus:ring-purple-500 cursor-pointer h-4 w-4">
+                         <label for="keep-current-selection" class="text-sm text-gray-700 select-none cursor-pointer">Giữ lại các sản phẩm đang chọn trước đó (Gộp thêm)</label>
+                    </div>
+                </div>
+                <div class="p-4 border-t bg-gray-50 flex justify-end gap-2">
+                    <button onclick="closeModal()" class="px-4 py-2 bg-gray-200 rounded font-bold text-gray-600 hover:bg-gray-300">Hủy</button>
+                    <button onclick="processQuickSelect()" class="px-4 py-2 bg-purple-600 text-white rounded font-bold flex items-center gap-2 hover:bg-purple-700 shadow-lg"><i data-lucide="printer" class="w-4 h-4"></i> Chọn & Xem In</button>
+                </div>
+            `;
+            showModal(html);
+            // Focus textarea
+            setTimeout(() => document.getElementById('quick-select-input').focus(), 100);
+        }
+
+        function processQuickSelect() {
+            const text = document.getElementById('quick-select-input').value;
+            const keepCurrent = document.getElementById('keep-current-selection').checked;
+            
+            if (!text.trim()) {
+                showToast('Vui lòng nhập danh sách mã', 'error');
+                return;
+            }
+
+            const codes = text.split(/[\n,;]+/).map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
+            
+            if (!keepCurrent) {
+                selectedIds.clear();
+            }
+
+            let foundCount = 0;
+            let notFoundCodes = [];
+
+            codes.forEach(code => {
+                const product = database.find(p => p.code.toLowerCase() === code);
+                if (product) {
+                    selectedIds.add(product.id);
+                    foundCount++;
+                } else {
+                    notFoundCodes.push(code.toUpperCase());
+                }
+            });
+
+            saveSystemState();
+            renderTable();
+            closeModal();
+
+            if (foundCount > 0) {
+                showToast(`Đã chọn ${foundCount} sản phẩm thành công!`);
+                switchTab('PRINT');
+            } else {
+                showToast('Không tìm thấy mã nào trong kho', 'error');
+            }
+
+            // ENHANCED NOTIFICATION FOR MISSING ITEMS
+            if (notFoundCodes.length > 0) {
+                setTimeout(() => {
+                   const missingHtml = `
+                    <div class="p-6">
+                        <div class="flex items-center gap-3 mb-4 text-red-600 border-b border-red-100 pb-3">
+                            <i data-lucide="alert-circle" class="w-8 h-8"></i>
+                            <h3 class="text-xl font-bold">Cảnh báo: Mã thiếu dữ liệu</h3>
+                        </div>
+                        <p class="mb-3 text-sm text-gray-600">Các mã sản phẩm sau <strong>không có trong Kho dữ liệu</strong>. Vui lòng thêm mới các mã này trước khi in:</p>
+                        <div class="bg-red-50 border border-red-200 rounded p-3 max-h-60 overflow-y-auto font-mono text-sm font-bold text-red-700">
+                            ${notFoundCodes.join('<br>')}
+                        </div>
+                        <div class="mt-6 flex justify-end">
+                            <button onclick="closeModal()" class="bg-gray-800 text-white px-6 py-2 rounded font-bold hover:bg-gray-700">Đã hiểu</button>
+                        </div>
+                    </div>
+                   `;
+                   showModal(missingHtml);
+                }, 500); // Slight delay to allow previous modal to close
+            }
+        }
+
         function saveEdit(id) {
             const p = database.find(x => x.id === id);
             if (!p) return;
@@ -907,7 +1024,6 @@
             p.salePrice = cleanPrice(document.getElementById('edit-sale').value);
             p.campaignName = document.getElementById('edit-campaign').value;
             
-            // Simple spec update (assuming structure kept)
             p.specs.forEach((s, i) => {
                 const lbl = document.getElementById(`spec-lbl-${i}`);
                 const val = document.getElementById(`spec-val-${i}`);
@@ -918,9 +1034,8 @@
             });
 
             closeModal();
-            saveSystemState(); // SAVE AFTER EDIT
+            saveSystemState(); 
             renderTable();
-            // Important: Re-render print area if we are editing
             renderPrintArea(); 
             showToast('Đã lưu thay đổi');
         }
@@ -944,7 +1059,7 @@
             database = database.filter(p => p.id !== id);
             selectedIds.delete(id);
             closeModal();
-            saveSystemState(); // SAVE AFTER DELETE
+            saveSystemState(); 
             renderTable();
             showToast('Đã xóa sản phẩm', 'success');
         }
@@ -955,22 +1070,13 @@
             const code = document.getElementById('inp-code').value;
             if (!code) return;
 
-            const base = generateProduct(code);
-            // Override with manual inputs
-            const name = document.getElementById('inp-name').value;
-            const price = document.getElementById('inp-price').value;
-            const link = document.getElementById('inp-link').value;
-
-            if (name) base.name = name;
-            if (price) { base.price = cleanPrice(price); base.salePrice = base.price * 0.9; }
-            if (link) base.link = link;
-
+            const base = generateProduct(code, document.getElementById('inp-name').value, document.getElementById('inp-price').value, document.getElementById('inp-link').value);
+            
             database.unshift(base);
             selectedIds.add(base.id);
             
-            // Reset form
             document.getElementById('add-form').reset();
-            saveSystemState(); // SAVE AFTER ADD
+            saveSystemState(); 
             renderTable();
             showToast('Đã thêm sản phẩm mới');
         });
@@ -979,22 +1085,50 @@
             const area = document.getElementById('bulk-import-area');
             const btnText = document.getElementById('bulk-btn-text');
             area.classList.toggle('hidden');
-            btnText.textContent = area.classList.contains('hidden') ? 'Hiện nhập liệu hàng loạt' : 'Ẩn nhập liệu hàng loạt';
+            btnText.textContent = area.classList.contains('hidden') ? 'Nhập hàng loạt (4 Cột)' : 'Ẩn nhập liệu';
         }
 
         function processBulkImport() {
-            const text = document.getElementById('bulk-textarea').value;
-            if (!text.trim()) return;
-            const lines = text.split('\n').filter(l => l.trim().length > 0);
-            const newItems = lines.map(generateProduct);
-            database = [...newItems, ...database];
-            newItems.forEach(p => selectedIds.add(p.id));
+            const codes = document.getElementById('bulk-codes').value.split('\n');
+            const names = document.getElementById('bulk-names').value.split('\n');
+            const prices = document.getElementById('bulk-prices').value.split('\n');
+            const links = document.getElementById('bulk-links').value.split('\n');
+
+            let addedCount = 0;
+
+            // Iterate based on codes length as it's the mandatory field
+            for (let i = 0; i < codes.length; i++) {
+                const code = codes[i]?.trim();
+                if (!code) continue;
+
+                // Safe access to other arrays
+                const name = names[i]?.trim() || '';
+                const price = prices[i]?.trim() || '';
+                const link = links[i]?.trim() || '';
+
+                const product = generateProduct(code, name, price, link);
+                if (product) {
+                    database.unshift(product);
+                    selectedIds.add(product.id);
+                    addedCount++;
+                }
+            }
+
+            // Clear inputs
+            document.getElementById('bulk-codes').value = '';
+            document.getElementById('bulk-names').value = '';
+            document.getElementById('bulk-prices').value = '';
+            document.getElementById('bulk-links').value = '';
             
-            document.getElementById('bulk-textarea').value = '';
             toggleBulkImport();
-            saveSystemState(); // SAVE AFTER BULK IMPORT
+            saveSystemState(); 
             renderTable();
-            showToast(`Đã nhập ${newItems.length} sản phẩm`);
+
+            if (addedCount > 0) {
+                showToast(`Đã nhập thành công ${addedCount} sản phẩm`);
+            } else {
+                showToast('Không có dữ liệu hợp lệ để nhập', 'error');
+            }
         }
 
         function exportJSON() {
@@ -1018,7 +1152,7 @@
                     if (Array.isArray(json)) {
                         database = [...json, ...database];
                         json.forEach(p => selectedIds.add(p.id));
-                        saveSystemState(); // SAVE AFTER JSON IMPORT
+                        saveSystemState(); 
                         renderTable();
                         showToast(`Đã nhập ${json.length} sản phẩm từ file`);
                     }
@@ -1040,16 +1174,15 @@
 
             showToast('Đang tạo PDF, vui lòng chờ...');
             
-            // Temporarily tweak styles for capture
             const originalTransform = printArea.style.transform;
-            printArea.style.transform = 'scale(1)'; // Ensure 1:1 scale
+            printArea.style.transform = 'scale(1)'; 
             
             try {
                 const canvas = await html2canvas(printArea, {
-                    scale: 2, // Higher quality
+                    scale: 2, 
                     useCORS: true,
                     logging: false,
-                    backgroundColor: '#ffffff' // Force white background to prevent black PDF
+                    backgroundColor: '#ffffff' 
                 });
 
                 const imgData = canvas.toDataURL('image/jpeg', 0.95);
@@ -1082,7 +1215,7 @@
             if(database.length === 0) {
                 ["LT.AC.NL16-71G-71UJ", "V.GIGA.3060"].forEach(c => {
                     const p = generateProduct(c);
-                    database.push(p);
+                    if(p) database.push(p);
                 });
             }
             renderTable();
