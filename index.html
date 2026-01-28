@@ -1164,12 +1164,39 @@
             input.value = '';
         }
 
-        // --- 8. PDF EXPORT ---
-        async function exportToPDF() {
-            const printArea = document.getElementById('print-area');
-            if (!printArea || printArea.children.length === 0) {
-                showToast('Không có nội dung để xuất PDF', 'error');
-                return;
+   <script>
+async function exportToPDF() {
+    const { jsPDF } = window.jspdf;
+    const printArea = document.getElementById("print-area");
+
+    if (!printArea || printArea.children.length === 0) {
+        showToast("Không có nội dung để xuất PDF", "error");
+        return;
+    }
+
+    const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+    });
+
+    await pdf.html(printArea, {
+        x: 5,
+        y: 5,
+        width: 200,
+        windowWidth: 1200,
+        autoPaging: "text",
+        html2canvas: {
+            scale: 1,
+            useCORS: true,
+            allowTaint: true
+        }
+    });
+
+    pdf.save("bang-gia.pdf");
+}
+</script>
+
             }
 
             showToast('Đang tạo PDF, vui lòng chờ...');
