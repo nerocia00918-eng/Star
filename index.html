@@ -40,7 +40,13 @@
             }
             /* Remove edit hover effects in print */
             .hover-edit-overlay { display: none !important; }
-            .sticker-wrapper { border: none !important; cursor: default !important; }
+            
+            /* FIXED: Force black border on print as requested for BOTH Small and Big stickers */
+            .sticker-wrapper { 
+                border: 1px solid #000 !important; 
+                cursor: default !important; 
+                box-sizing: border-box;
+            }
         }
 
         /* Bulk Import Textarea: No Wrap to easily spot bad lines */
@@ -48,6 +54,22 @@
             white-space: pre; /* Force text to stay on one line unless explicit newline */
             overflow-x: auto;
             overflow-y: scroll;
+        }
+        
+        /* QR Code Image Constraint */
+        .qr-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .qr-container img {
+            max-width: 100% !important;
+            max-height: 100% !important;
+            width: auto !important;
+            height: auto !important;
+            object-fit: contain;
+            display: block;
         }
     </style>
 <script type="importmap">
@@ -769,9 +791,11 @@
             items.forEach((product, idx) => {
                 const cell = document.createElement('div');
                 cell.className = "flex items-center justify-center break-inside-avoid page-break";
-                // Approx dimensions converted to CSS
-                cell.style.width = printMode === 'NORMAL' ? '98mm' : '65mm';
-                cell.style.height = printMode === 'NORMAL' ? '90mm' : '35mm';
+                // A4 dimensions: 210mm x 297mm
+                // NORMAL (2x3): width ~100mm, height ~95mm to fit with borders and margin
+                // SMALL (3x8): width ~68mm, height ~36mm
+                cell.style.width = printMode === 'NORMAL' ? '100mm' : '68mm';
+                cell.style.height = printMode === 'NORMAL' ? '95mm' : '36mm';
                 cell.style.padding = '2mm';
 
                 if (printMode === 'NORMAL') {
@@ -821,7 +845,7 @@
             `).join('');
 
             return `
-            <div onclick="openEditModal('${product.id}')" class="w-full h-full bg-white border-2 border-gray-400 flex flex-col overflow-hidden relative text-xs cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all group sticker-wrapper" title="Nhấn để chỉnh sửa">
+            <div onclick="openEditModal('${product.id}')" class="w-full h-full bg-white flex flex-col overflow-hidden relative text-xs cursor-pointer border border-black transition-all group sticker-wrapper" title="Nhấn để chỉnh sửa">
                 <div class="absolute inset-0 bg-blue-500/10 hidden group-hover:flex items-center justify-center z-50 hover-edit-overlay pointer-events-none">
                      <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-lg font-bold flex items-center gap-1"><i data-lucide="edit-2" class="w-3 h-3"></i> Sửa</span>
                 </div>
@@ -845,59 +869,63 @@
             </div>`;
         }
 
-        // --- NEW SMALL STICKER DESIGN ---
+        // --- NEW SMALL STICKER DESIGN (UPDATED) ---
         function generateSmallStickerHTML(product) {
             const isFlash = campaign === 'FL';
             const isGV = campaign === 'GV';
             const price = (isFlash || isGV) && product.salePrice ? product.salePrice : product.price;
             
-            // Text for Campaign
-            let promoText = product.campaignName || (isFlash ? 'FLASH SALE' : (isGV ? 'GIÁ SỐC' : 'KHUYẾN MÃI'));
-            
-            // Dynamic Styles
-            const promoStyle = `color: ${promoColor};`;
             const headerBgStyle = `background-color: ${bgNameColor};`;
+            
+            // Logic to display campaign text
+            const campaignText = product.campaignName || (isFlash ? 'FLASH SALE' : (isGV ? 'GIÁ SỐC' : ''));
+
+            // Campaign Header (Row 1)
+            const campaignHeader = campaignText 
+                ? `<div class="bg-yellow-400 text-red-700 font-black text-[9px] text-center uppercase tracking-wider py-0.5 border-b border-black leading-none w-full">${campaignText}</div>` 
+                : '';
 
             return `
-            <div onclick="openEditModal('${product.id}')" class="w-full h-full bg-white border border-gray-300 flex flex-col overflow-hidden text-xs relative group cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all sticker-wrapper" title="Nhấn để chỉnh sửa">
+            <div onclick="openEditModal('${product.id}')" class="w-full h-full bg-white flex flex-col overflow-hidden text-xs relative group cursor-pointer border border-black transition-all sticker-wrapper" title="Nhấn để chỉnh sửa">
+                
+                <!-- Hover Overlay -->
                 <div class="absolute inset-0 bg-blue-500/10 hidden group-hover:flex items-center justify-center z-50 hover-edit-overlay pointer-events-none">
                      <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-lg font-bold flex items-center gap-1"><i data-lucide="edit-2" class="w-3 h-3"></i> Sửa</span>
                 </div>
-                <!-- 1. Top: Campaign Info (Yellow Text) -->
-                <div class="h-[15%] bg-slate-900 flex items-center justify-center">
-                    <span class="font-black text-[9px] uppercase tracking-widest leading-none" style="${promoStyle}">
-                        ${promoText}
-                    </span>
+
+                <!-- 1. CAMPAIGN (Full Width) -->
+                ${campaignHeader}
+
+                <!-- 2. NAME (Full Width) -->
+                <div class="text-white font-bold text-[10px] px-1 py-0.5 text-center leading-tight flex items-center justify-center h-[28%] overflow-hidden w-full border-b border-black" style="${headerBgStyle}">
+                    <span class="line-clamp-2 uppercase">${product.name}</span>
                 </div>
 
-                <!-- 2. Name: Red Background -->
-                <div class="h-[35%] flex items-center justify-center px-1 text-center text-white" style="${headerBgStyle}">
-                    <span class="font-bold text-[9px] leading-tight line-clamp-2 uppercase">
-                        ${product.name}
-                    </span>
-                </div>
-
-                <!-- 3. Bottom: Info + QR -->
-                <div class="flex-1 flex bg-white">
-                    <!-- Left: Details -->
-                    <div class="flex-1 flex flex-col border-r border-gray-100">
-                        <!-- Price Area -->
-                        <div class="flex-1 flex flex-col items-center justify-center bg-yellow-50 py-0.5">
-                            <div class="text-2xl font-black text-red-600 leading-none tracking-tighter">
-                                ${formatPrice(price)}
-                            </div>
-                            ${(isFlash || isGV) ? `<div class="text-[8px] text-gray-400 line-through leading-none mt-0.5">${formatPrice(product.price)}</div>` : ''}
+                <!-- 3. BODY (Split Left/Right) -->
+                <div class="flex-1 flex flex-row w-full min-h-0">
+                    <!-- LEFT: Price (Top) + Code (Bottom) -->
+                    <div class="flex-1 flex flex-col border-r border-black min-w-0">
+                        <!-- Price -->
+                        <div class="flex-1 flex flex-col items-center justify-center bg-white p-0.5">
+                            <div class="text-2xl font-black text-red-600 leading-none tracking-tighter truncate w-full text-center">${formatPrice(price)}</div>
+                            ${(isFlash || isGV) ? `<div class="text-[9px] text-gray-400 line-through leading-none mt-0.5">${formatPrice(product.price)}</div>` : ''}
                         </div>
-                        <!-- Code & Warranty -->
-                        <div class="h-[14px] bg-gray-100 flex items-center justify-between px-1 text-[8px]">
-                            <span class="font-mono font-bold text-gray-600 break-all whitespace-normal text-[7px] leading-tight max-w-[50px]">${product.code}</span>
-                            <span class="font-bold text-blue-700 bg-white border border-blue-200 px-0.5 rounded-[2px] whitespace-nowrap">BH:${product.warranty.replace(' Tháng','T')}</span>
+                        <!-- Code -->
+                        <div class="border-t border-black px-1 py-0.5 bg-gray-50 text-center min-h-[16px] flex items-center justify-center">
+                             <span class="font-mono font-bold text-gray-700 text-[9px] leading-none break-words whitespace-normal w-full line-clamp-2">${product.code}</span>
                         </div>
                     </div>
-                    
-                    <!-- Right: QR Code (Pushed down/right) -->
-                    <div class="w-[30%] p-0.5 flex items-center justify-center">
-                         <div id="qr-${product.id}-SMALL" class="w-full aspect-square bg-white flex items-center justify-center overflow-hidden"></div>
+
+                    <!-- RIGHT: QR (Top) + Warranty (Bottom) -->
+                    <div class="w-[28%] flex flex-col min-w-[36px]">
+                        <!-- QR -->
+                        <div class="flex-1 flex items-center justify-center p-0.5 overflow-hidden qr-container">
+                             <div id="qr-${product.id}-SMALL" class="w-full h-full flex items-center justify-center"></div>
+                        </div>
+                        <!-- Warranty -->
+                        <div class="border-t border-black px-0.5 py-0.5 text-center min-h-[16px] flex items-center justify-center bg-blue-50">
+                             <span class="text-[8px] font-bold text-blue-600 leading-none whitespace-nowrap scale-95 transform">BH: ${product.warranty.replace(' Tháng','T')}</span>
+                        </div>
                     </div>
                 </div>
             </div>`;
