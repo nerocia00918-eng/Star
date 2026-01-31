@@ -453,7 +453,7 @@
 
     <!-- JAVASCRIPT LOGIC -->
     <script type="module">
-        import { GoogleGenAI } from "@google/genai";
+        import { GoogleGenAI } from "https://esm.sh/@google/genai";
 
         // IMPORTANT: In a real deployment, this should be handled by a build process.
         // For this single HTML file demo, we simulate process.env.
@@ -1693,7 +1693,7 @@
         async function autoFillSpecs(id) {
             const apiKey = window.process?.env?.API_KEY;
             
-            if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
+            if (!apiKey || apiKey === 'AIzaSyCmYlSt2D0NT3DU1b9hlATo-FsRc-3ptIg') {
                 showToast('Chưa cấu hình API Key. Vui lòng mở code và thay thế YOUR_API_KEY_HERE', 'error');
                 return;
             }
