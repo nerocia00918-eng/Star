@@ -86,7 +86,7 @@
                 height: 297mm;
                 /* IMPORTANT: Reset margin to 0 to prevent spillover to next page */
                 margin: 0 !important; 
-                padding: 5mm !important; /* Global padding safely inside printable area */
+                padding: 0 !important; /* Managed by grid gap/padding inside */
                 box-sizing: border-box;
                 display: block;
                 overflow: hidden; /* Prevent bleed */
@@ -135,7 +135,7 @@
             justify-content: center;
             overflow: hidden;
         }
-        .qr-container img {
+        .qr-container img, .qr-container canvas {
             max-width: 100% !important;
             max-height: 100% !important;
             width: auto !important;
@@ -944,7 +944,8 @@
 
             const isNormal = printMode === 'NORMAL';
             const pageSize = isNormal ? 6 : 24;
-            const gridClass = isNormal ? 'grid-cols-2' : 'grid-cols-3';
+            // UPDATED: Use justify-center and gap-0 to allow exact sizing (95mm x 2 = 190mm on 210mm paper)
+            const gridClass = isNormal ? 'grid-cols-2 justify-center gap-0' : 'grid-cols-3';
 
             // PAGINATION LOGIC: Chunk items
             for (let i = 0; i < items.length; i += pageSize) {
@@ -961,9 +962,11 @@
                     const cell = document.createElement('div');
                     cell.className = "flex items-center justify-center break-inside-avoid relative";
                     
-                    // NEW DIMENSIONS: 9.5cm x 8.5cm for Big
+                    // NEW DIMENSIONS: 9.5cm x 8.5cm for Big (Updated Request)
+                    // 95mm width + 95mm width = 190mm (A4 is 210mm, so 10mm margin each side - Perfect)
                     cell.style.width = isNormal ? '95mm' : '68mm';
                     cell.style.height = isNormal ? '85mm' : '36mm';
+                    // Reduce padding inside cell to allow more content space for bigger size
                     cell.style.padding = '2mm';
 
                     if (isNormal) {
@@ -1644,7 +1647,7 @@
                     });
 
                     // 5. Convert to JPEG to save memory (Default PNG is massive)
-                    const imgData = canvas.toDataURL('image/jpeg', 0.9);
+                    const imgData = canvas.toDataURL('image/jpeg', 0.8);
                     
                     if (i > 0) pdf.addPage();
                     pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, pageHeight);
@@ -1653,8 +1656,8 @@
                     sandbox.removeChild(pageClone);
                     
                     // 7. YIELD TO MAIN THREAD (CRITICAL FIX FOR FREEZING)
-                    // This allows the UI to update and prevents "Page Unresponsive"
-                    await new Promise(resolve => setTimeout(resolve, 10));
+                    // Increased delay to 100ms to ensure browser UI thread catches up
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
 
                 pdf.save(`PrintStar_${new Date().toISOString().slice(0,10)}.pdf`);
