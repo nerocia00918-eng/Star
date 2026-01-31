@@ -193,7 +193,8 @@
     "react/": "https://esm.sh/react@^19.2.4/",
     "react": "https://esm.sh/react@^19.2.4",
     "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "qrcode.react": "https://esm.sh/qrcode.react@^4.2.0"
+    "qrcode.react": "https://esm.sh/qrcode.react@^4.2.0",
+    "@google/genai": "https://esm.sh/@google/genai"
   }
 }
 </script>
@@ -451,7 +452,14 @@
     </main>
 
     <!-- JAVASCRIPT LOGIC -->
-    <script>
+    <script type="module">
+        import { GoogleGenAI } from "@google/genai";
+
+        // IMPORTANT: In a real deployment, this should be handled by a build process.
+        // For this single HTML file demo, we simulate process.env.
+        // USER INSTRUCTION: Replace 'YOUR_API_KEY_HERE' with your actual Google Gemini API Key.
+        window.process = { env: { API_KEY: 'AIzaSyCmYlSt2D0NT3DU1b9hlATo-FsRc-3ptIg' } };
+
         // --- 0. STORAGE KEYS ---
         const STORAGE_KEY_DB = 'printstar_db_v1';
         const STORAGE_KEY_SETTINGS = 'printstar_settings_v1';
@@ -1204,7 +1212,11 @@
                     <div><label class="text-xs font-bold text-gray-500">Khuyến Mãi Text</label><input id="edit-campaign" class="w-full border p-2 rounded" value="${p.campaignName || ''}" placeholder="VD: SALE 9/9"></div>
                     <div class="border-t pt-3">
                         <div class="flex justify-between items-center mb-2">
-                            <label class="font-bold">Thông số kỹ thuật</label>
+                            <label class="font-bold flex items-center gap-2">Thông số kỹ thuật 
+                                <button onclick="autoFillSpecs('${p.id}')" id="btn-autofill-ai" class="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded-full border border-purple-200 hover:bg-purple-200 transition-colors flex items-center gap-1 font-black uppercase">
+                                    <i data-lucide="sparkles" class="w-3 h-3"></i> AI Tự động điền
+                                </button>
+                            </label>
                             <button onclick="addSpecRow()" class="text-sm text-blue-600 font-bold flex items-center gap-1 hover:underline"><i data-lucide="plus" class="w-3 h-3"></i> Thêm thông số</button>
                         </div>
                         <div id="specs-container">
@@ -1552,7 +1564,8 @@
             showToast('Đã tải xuống file dữ liệu');
         }
 
-        function importJSON(input) {
+        // Exported to window because of module type
+        window.importJSON = function(input) {
             const file = input.files[0];
             if (!file) return;
             const reader = new FileReader();
@@ -1676,6 +1689,107 @@
             }
         }
 
+        // --- AI LOGIC ---
+        async function autoFillSpecs(id) {
+            const apiKey = window.process?.env?.API_KEY;
+            
+            if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
+                showToast('Chưa cấu hình API Key. Vui lòng mở code và thay thế YOUR_API_KEY_HERE', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('btn-autofill-ai');
+            const originalText = btn.innerHTML;
+            
+            try {
+                // 1. Get current values from DOM (most up to date)
+                const code = document.getElementById('edit-code').value;
+                const name = document.getElementById('edit-name').value;
+                
+                // 2. Identify fields
+                const specRows = document.querySelectorAll('#specs-container .spec-row');
+                const fieldLabels = Array.from(specRows).map(row => row.querySelector('.spec-label').value).filter(l => l);
+
+                if (fieldLabels.length === 0) {
+                     showToast('Không có trường thông tin nào để điền', 'error');
+                     return;
+                }
+
+                // UI Loading
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> Đang suy nghĩ...`;
+                lucide.createIcons();
+                
+                // 3. Init AI
+                const ai = new GoogleGenAI({ apiKey: apiKey });
+                
+                // 4. Prompt
+                const prompt = `
+                I am listing a computer product.
+                Product Code: ${code}
+                Product Name: ${name}
+                
+                Please provide the technical specifications for the following fields in Vietnamese.
+                Fields: ${JSON.stringify(fieldLabels)}
+                
+                Return only a JSON object where keys are the fields and values are the short, concise technical details for a sticker label.
+                Example: {"CPU": "Core i5-12400F", "RAM": "8GB DDR4 3200MHz"}
+                `;
+
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.0-flash',
+                    contents: prompt,
+                    config: {
+                        responseMimeType: "application/json"
+                    }
+                });
+
+                const text = response.text;
+                let data;
+                try {
+                    // Handle potential Markdown formatting from AI
+                    const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                    data = JSON.parse(cleanText);
+                } catch (e) {
+                     // Parsing failed means AI didn't return JSON (likely refused or chatted)
+                    throw new Error("AI_NO_DATA");
+                }
+
+                let filledCount = 0;
+                // 5. Fill Data back into DOM
+                specRows.forEach(row => {
+                    const label = row.querySelector('.spec-label').value;
+                    if (data[label]) {
+                        // Flash highlight effect
+                        const input = row.querySelector('.spec-value');
+                        input.value = data[label];
+                        input.classList.add('bg-purple-100', 'transition-colors', 'duration-500');
+                        setTimeout(() => input.classList.remove('bg-purple-100'), 1000);
+                        filledCount++;
+                    }
+                });
+
+                if (filledCount === 0) {
+                    throw new Error("AI_NO_DATA");
+                }
+
+                showToast('Đã tự động điền thông số!', 'success');
+
+            } catch (error) {
+                console.error("AI Error:", error);
+                
+                // Check specifically for API Key issues first
+                if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
+                    showToast('Chưa cấu hình API Key', 'error');
+                } else {
+                    // Default generic error for user content issues
+                    showToast("Tự tìm đi, AI đâu phải ở đợ mà bắt làm hoài", 'error');
+                }
+            } finally {
+                btn.innerHTML = originalText;
+                lucide.createIcons();
+            }
+        }
+
         // Init
         window.addEventListener('DOMContentLoaded', () => {
             // LOAD FROM STORAGE
@@ -1690,6 +1804,31 @@
             }
             renderTable();
         });
+
+        // --- EXPORT GLOBALS FOR HTML EVENTS ---
+        window.switchTab = switchTab;
+        window.renderTable = renderTable;
+        window.toggleSelect = toggleSelect;
+        window.removeIdFromSelection = removeIdFromSelection;
+        window.toggleItemCampaign = toggleItemCampaign;
+        window.toggleSelectAll = toggleSelectAll;
+        window.clearAllData = clearAllData;
+        window.setPrintMode = setPrintMode;
+        window.updatePrintSettings = updatePrintSettings;
+        window.exportToPDF = exportToPDF;
+        window.openEditModal = openEditModal;
+        window.closeModal = closeModal;
+        window.saveEdit = saveEdit;
+        window.deleteProduct = deleteProduct;
+        window.performDelete = performDelete;
+        window.toggleBulkImport = toggleBulkImport;
+        window.updateLineCounts = updateLineCounts;
+        window.processBulkImport = processBulkImport;
+        window.exportJSON = exportJSON;
+        window.addSpecRow = addSpecRow;
+        window.openQuickSelectModal = openQuickSelectModal;
+        window.processQuickSelect = processQuickSelect;
+        window.autoFillSpecs = autoFillSpecs;
 
     </script>
 </body>
