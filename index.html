@@ -84,9 +84,9 @@
             .print-page {
                 width: 210mm;
                 height: 297mm;
-                /* IMPORTANT: Reset margin to 0 to prevent spillover to next page */
+                /* SAFE PADDING: Top 10mm, Left 6mm to avoid printer cutting edges */
+                padding: 10mm 5mm 5mm 6mm !important;
                 margin: 0 !important; 
-                padding: 0 !important; /* Managed by grid gap/padding inside */
                 box-sizing: border-box;
                 display: block;
                 overflow: hidden; /* Prevent bleed */
@@ -962,11 +962,11 @@
                     const cell = document.createElement('div');
                     cell.className = "flex items-center justify-center break-inside-avoid relative";
                     
-                    // NEW DIMENSIONS: 102mm x 90mm for Big (Compensating for browser scaling)
-                    // If scaled 0.95 -> ~97mm width.
-                    // 102mm * 2 = 204mm (fits A4 210mm safely)
-                    cell.style.width = isNormal ? '102mm' : '68mm';
-                    cell.style.height = isNormal ? '90mm' : '36mm';
+                    // NEW DIMENSIONS: Slightly reduced to allow padding
+                    // Normal: 98mm x 92mm. (Total width 196 + 10 padding = 206 < 210)
+                    // Small: 65mm x 35mm. (Total width 195 + 10 padding = 205 < 210)
+                    cell.style.width = isNormal ? '98mm' : '65mm';
+                    cell.style.height = isNormal ? '92mm' : '35mm';
                     // Reduce padding to 0 for maximum size inside cell
                     cell.style.padding = isNormal ? '0' : '2mm';
 
