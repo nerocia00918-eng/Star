@@ -29,15 +29,35 @@
             body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
             .print-only { display: block !important; }
-            .page-break { page-break-inside: avoid; break-inside: avoid; }
+            
+            /* Page Container for strict pagination */
+            .print-page {
+                width: 210mm;
+                height: 297mm;
+                page-break-after: always; /* Force new page after each block */
+                page-break-inside: avoid;
+                margin: 0;
+                padding: 5mm; /* Global padding safely inside printable area */
+                box-sizing: border-box;
+                display: block;
+                overflow: hidden; /* Prevent bleed */
+                border: none !important; /* Remove screen preview borders */
+                box-shadow: none !important; /* Remove screen preview shadows */
+            }
+            .print-page:last-child {
+                page-break-after: auto;
+            }
+
             #print-area { 
-                width: 210mm; 
+                width: auto;
                 margin: 0; 
                 padding: 0; 
                 box-shadow: none; 
                 border: none;
-                transform: none !important; /* Reset generic transforms */
+                transform: none !important;
+                background: none;
             }
+            
             /* Remove edit hover effects in print */
             .hover-edit-overlay { display: none !important; }
             
@@ -47,6 +67,18 @@
                 cursor: default !important; 
                 box-sizing: border-box;
             }
+        }
+
+        /* Exporting PDF State - mimics Print state */
+        body.is-exporting .hover-edit-overlay,
+        body.is-exporting .btn-delete-sticker,
+        body.is-exporting .toggle-campaign-wrapper { 
+            display: none !important; 
+        }
+        body.is-exporting .print-page {
+            border: none !important;
+            box-shadow: none !important;
+            margin: 0 !important; /* Reset margin for capture */
         }
 
         /* Bulk Import Textarea: No Wrap to easily spot bad lines */
@@ -71,6 +103,49 @@
             object-fit: contain;
             display: block;
         }
+
+        /* Styles for the Delete 'X' button */
+        .btn-delete-sticker {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            width: 24px;
+            height: 24px;
+            background: #EF4444;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 60;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            font-weight: bold;
+            font-size: 14px;
+            border: 2px solid white;
+        }
+        .btn-delete-sticker:hover { background: #DC2626; transform: scale(1.1); }
+
+        /* Styles for Campaign Toggle Checkbox */
+        .toggle-campaign-wrapper {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            z-index: 60;
+            background: white;
+            padding: 2px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            border: 1px solid #ddd;
+            font-size: 10px;
+            font-weight: bold;
+            color: #333;
+            cursor: pointer;
+        }
+        .toggle-campaign-wrapper:hover { background: #f9fafb; }
     </style>
 <script type="importmap">
 {
@@ -277,12 +352,13 @@
 
                         <!-- Campaign Selection -->
                         <div>
-                            <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Chế độ Chiến dịch</label>
+                            <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Chế độ Chiến dịch (Toàn cục)</label>
                             <select id="sel-campaign" onchange="updatePrintSettings()" class="w-full border p-2 rounded text-sm bg-white outline-none">
                                 <option value="NONE">Mặc định (Cam)</option>
                                 <option value="GV">Giá Sốc (GV)</option>
                                 <option value="FL">Flash Sale (Đỏ)</option>
                             </select>
+                            <p class="text-[10px] text-gray-400 mt-1 italic">*Tắt/Mở CTKM riêng từng tem bằng cách tick vào ô vuông trên tem.</p>
                         </div>
 
                         <!-- Color Customization -->
@@ -315,14 +391,18 @@
                 </div>
                 <div class="bg-blue-50 border border-blue-100 text-blue-800 p-4 rounded-xl text-sm">
                     <p class="font-bold flex items-center gap-1"><i data-lucide="info" class="w-4 h-4"></i> Mẹo:</p>
-                    <p>Bạn có thể nhấn trực tiếp vào con tem bên phải để chỉnh sửa nhanh thông tin.</p>
+                    <ul class="list-disc pl-5 mt-1 text-xs space-y-1">
+                        <li>Nhấn vào tem để chỉnh sửa thông tin.</li>
+                        <li>Nhấn nút <strong>X</strong> đỏ để xóa khỏi list in.</li>
+                        <li>Tick vào ô vuông góc trái tem để Tắt/Mở giá CTKM cho riêng tem đó.</li>
+                    </ul>
                 </div>
             </div>
 
             <!-- Preview Area -->
             <div class="flex-1 bg-gray-200 p-4 md:p-8 flex justify-center rounded-xl border-4 border-dashed border-gray-300 min-h-[800px] overflow-auto">
-                <div id="print-area" class="bg-white shadow-2xl w-[210mm] min-h-[297mm] p-[5mm] origin-top transform scale-100 transition-transform cursor-default">
-                    <!-- Stickers rendered here -->
+                <div id="print-area" class="w-fit origin-top transform scale-100 transition-transform cursor-default flex flex-col gap-4">
+                    <!-- Stickers pages rendered here -->
                 </div>
             </div>
         </div>
@@ -526,6 +606,7 @@
         // State
         let database = [];
         let selectedIds = new Set();
+        let excludedCampaignIds = new Set(); // New: Track items that opted-out of campaign
         let printMode = 'NORMAL';
         let campaign = 'NONE';
         let promoColor = '#FFFF00';
@@ -539,6 +620,7 @@
             // Save Settings & Selection
             const settings = {
                 selectedIds: Array.from(selectedIds),
+                excludedCampaignIds: Array.from(excludedCampaignIds),
                 printMode,
                 campaign,
                 promoColor,
@@ -562,6 +644,7 @@
                 try {
                     const settings = JSON.parse(savedSettings);
                     if (settings.selectedIds) selectedIds = new Set(settings.selectedIds);
+                    if (settings.excludedCampaignIds) excludedCampaignIds = new Set(settings.excludedCampaignIds);
                     if (settings.printMode) printMode = settings.printMode;
                     if (settings.campaign) campaign = settings.campaign;
                     if (settings.promoColor) promoColor = settings.promoColor;
@@ -718,6 +801,27 @@
             renderTable();
         }
 
+        function removeIdFromSelection(id) {
+            if (selectedIds.has(id)) {
+                selectedIds.delete(id);
+                saveSystemState();
+                renderPrintArea(); // Re-render immediately
+                showToast('Đã xóa khỏi danh sách in', 'success');
+                updateCountBadge();
+            }
+        }
+
+        // New function to toggle campaign state per item
+        function toggleItemCampaign(id) {
+            if (excludedCampaignIds.has(id)) {
+                excludedCampaignIds.delete(id);
+            } else {
+                excludedCampaignIds.add(id);
+            }
+            saveSystemState();
+            renderPrintArea();
+        }
+
         function toggleSelectAll() {
             const checkAll = document.getElementById('check-all');
             const searchInput = document.getElementById('search-input');
@@ -750,6 +854,7 @@
             if(confirm("Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu? Hành động này không thể hoàn tác.")) {
                 database = [];
                 selectedIds.clear();
+                excludedCampaignIds.clear();
                 saveSystemState();
                 renderTable();
                 showToast("Đã xóa toàn bộ dữ liệu", "success");
@@ -779,42 +884,55 @@
             container.innerHTML = '';
 
             if (items.length === 0) {
-                container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-gray-400"><i data-lucide="printer" class="w-12 h-12 mb-2 opacity-50"></i><p>Chưa chọn sản phẩm nào.</p></div>`;
+                container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-gray-400 py-10"><i data-lucide="printer" class="w-12 h-12 mb-2 opacity-50"></i><p>Chưa chọn sản phẩm nào.</p></div>`;
                 lucide.createIcons();
                 return;
             }
 
-            const gridClass = printMode === 'NORMAL' ? 'grid-cols-2' : 'grid-cols-3';
-            const wrapper = document.createElement('div');
-            wrapper.className = `grid ${gridClass} content-start justify-center`;
-            
-            items.forEach((product, idx) => {
-                const cell = document.createElement('div');
-                cell.className = "flex items-center justify-center break-inside-avoid page-break";
-                // A4 dimensions: 210mm x 297mm
-                // NORMAL (2x3): width ~100mm, height ~95mm to fit with borders and margin
-                // SMALL (3x8): width ~68mm, height ~36mm
-                cell.style.width = printMode === 'NORMAL' ? '100mm' : '68mm';
-                cell.style.height = printMode === 'NORMAL' ? '95mm' : '36mm';
-                cell.style.padding = '2mm';
+            const isNormal = printMode === 'NORMAL';
+            const pageSize = isNormal ? 6 : 24;
+            const gridClass = isNormal ? 'grid-cols-2' : 'grid-cols-3';
 
-                if (printMode === 'NORMAL') {
-                    cell.innerHTML = generateNormalStickerHTML(product);
-                } else {
-                    cell.innerHTML = generateSmallStickerHTML(product);
-                }
-                wrapper.appendChild(cell);
-            });
-            container.appendChild(wrapper);
+            // PAGINATION LOGIC: Chunk items
+            for (let i = 0; i < items.length; i += pageSize) {
+                const chunk = items.slice(i, i + pageSize);
+                
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'print-page bg-white shadow-lg mb-4'; // Added shadow/mb for preview look
+
+                const gridWrapper = document.createElement('div');
+                gridWrapper.className = `grid ${gridClass} content-start justify-center`;
+                
+                chunk.forEach(product => {
+                    const cell = document.createElement('div');
+                    cell.className = "flex items-center justify-center break-inside-avoid relative";
+                    
+                    // NEW DIMENSIONS: 9.5cm x 8.5cm for Big
+                    cell.style.width = isNormal ? '95mm' : '68mm';
+                    cell.style.height = isNormal ? '85mm' : '36mm';
+                    cell.style.padding = '2mm';
+
+                    if (isNormal) {
+                        cell.innerHTML = generateNormalStickerHTML(product);
+                    } else {
+                        cell.innerHTML = generateSmallStickerHTML(product);
+                    }
+                    gridWrapper.appendChild(cell);
+                });
+
+                pageDiv.appendChild(gridWrapper);
+                container.appendChild(pageDiv);
+            }
 
             // Render QR Codes manually after DOM insertion
             setTimeout(() => {
                 items.forEach((p, idx) => {
+                    // QR codes might appear multiple times if logic changes, but here we render once per ID per render.
+                    // Actually, IDs must be unique in DOM. In pagination, ids are fine.
                     const el = document.getElementById(`qr-${p.id}-${printMode}`);
                     if (el) {
                         el.innerHTML = '';
                         new QRCode(el, { text: p.link, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.L });
-                        // Remove the title attribute added by qrcodejs to avoid tooltip
                         const img = el.querySelector('img');
                         if (img) img.removeAttribute('title');
                     }
@@ -825,14 +943,21 @@
         }
 
         function generateNormalStickerHTML(product) {
-            const isFlash = campaign === 'FL';
-            const isGV = campaign === 'GV';
+            // Check global campaign AND exclusion list
+            const isCampaignActive = campaign !== 'NONE' && !excludedCampaignIds.has(product.id);
+            const isFlash = isCampaignActive && campaign === 'FL';
+            const isGV = isCampaignActive && campaign === 'GV';
+
             const price = (isFlash || isGV) && product.salePrice ? product.salePrice : product.price;
-            const headerColor = isFlash ? 'bg-red-600' : 'bg-orange-500';
             
-            // Allow up to 7 items now
+            // ADJUST FONT SIZE FOR PROMO PRICE TO PREVENT OVERLAP
+            const priceFontSize = (isFlash || isGV) ? 'text-3xl' : 'text-4xl';
+
+            // UPDATED DEFAULT COLOR TO RED-600
+            const headerColor = isFlash ? 'bg-red-700' : (isGV ? 'bg-orange-500' : 'bg-red-600');
+            
             const maxSpecs = 7;
-            const rowHeightClass = 'h-[14.2%]'; // 100% / 7 approx
+            const rowHeightClass = 'h-[14.2%]';
 
             let specsHTML = product.specs.slice(0, maxSpecs).map((s, i) => `
                 <div class="flex items-center border-b border-gray-200 ${rowHeightClass} ${i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}">
@@ -844,26 +969,56 @@
                 </div>
             `).join('');
 
+            // CHECKBOX STATE
+            const isChecked = !excludedCampaignIds.has(product.id); // Default true implies "Use Campaign"
+            // If Global Campaign is NONE, checkbox is hidden anyway, logic handled below.
+
+            const campaignToggleHTML = campaign !== 'NONE' ? `
+                <div class="toggle-campaign-wrapper hover-edit-overlay" onclick="event.stopPropagation(); toggleItemCampaign('${product.id}')" title="Bật/Tắt giá khuyến mãi cho tem này">
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} class="pointer-events-none w-3 h-3 text-blue-600 rounded">
+                    <span>CTKM</span>
+                </div>
+            ` : '';
+
+            // --- NEW BADGE LOGIC ---
+            let campaignBadgeHTML = '';
+            if (isCampaignActive) {
+                // Display custom text if available, otherwise default to campaign mode name
+                const text = product.campaignName || (isFlash ? 'FLASH SALE' : (isGV ? 'GIÁ SỐC' : ''));
+                if(text) {
+                     campaignBadgeHTML = `<div class="w-full bg-yellow-400 text-red-700 font-bold text-[10px] text-center uppercase leading-none py-0.5 border-b border-yellow-500 mb-0.5">${text}</div>`;
+                }
+            }
+
             return `
-            <div onclick="openEditModal('${product.id}')" class="w-full h-full bg-white flex flex-col overflow-hidden relative text-xs cursor-pointer border border-black transition-all group sticker-wrapper" title="Nhấn để chỉnh sửa">
-                <div class="absolute inset-0 bg-blue-500/10 hidden group-hover:flex items-center justify-center z-50 hover-edit-overlay pointer-events-none">
-                     <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-lg font-bold flex items-center gap-1"><i data-lucide="edit-2" class="w-3 h-3"></i> Sửa</span>
-                </div>
-                <div class="${headerColor} text-white px-2 py-1 h-[20%] flex items-center">
-                    <div id="qr-${product.id}-NORMAL" class="h-full aspect-square bg-white mr-2 flex items-center justify-center p-1 overflow-hidden"></div>
-                    <div class="flex-1 font-bold leading-tight line-clamp-3 text-[13px] uppercase">${product.name}</div>
-                </div>
-                <div class="flex-1 flex flex-col w-full bg-white overflow-hidden border-b border-gray-400">
-                    ${specsHTML}
-                </div>
-                <div class="h-[18%] flex bg-white relative">
-                    <div class="w-[35%] flex flex-col justify-center px-1 border-r border-gray-200">
-                        <div class="text-[10px] font-mono font-bold text-gray-500 text-center break-all leading-tight">${product.code}</div>
-                        <div class="text-[9px] font-bold text-blue-600 text-center uppercase border rounded bg-blue-50 mt-0.5">BH: ${product.warranty}</div>
+            <div class="relative w-full h-full">
+                <!-- DELETE BUTTON (Hidden on Print) -->
+                <div class="btn-delete-sticker hover-edit-overlay" onclick="event.stopPropagation(); removeIdFromSelection('${product.id}')" title="Xóa khỏi list in">X</div>
+                
+                <!-- CAMPAIGN TOGGLE (Hidden on Print) -->
+                ${campaignToggleHTML}
+
+                <div onclick="openEditModal('${product.id}')" class="w-full h-full bg-white flex flex-col overflow-hidden relative text-xs cursor-pointer border border-black transition-all group sticker-wrapper" title="Nhấn để chỉnh sửa">
+                    <div class="absolute inset-0 bg-blue-500/10 hidden group-hover:flex items-center justify-center z-50 hover-edit-overlay pointer-events-none">
+                         <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-lg font-bold flex items-center gap-1"><i data-lucide="edit-2" class="w-3 h-3"></i> Sửa</span>
                     </div>
-                    <div class="flex-1 flex flex-col items-center justify-center bg-yellow-50">
-                        <div class="text-4xl font-black text-red-600 leading-none tracking-tighter">${formatPrice(price)}</div>
-                        ${(isFlash || isGV) ? `<div class="text-[10px] text-gray-400 line-through absolute bottom-0.5 right-2">${formatPrice(product.price)}</div>` : ''}
+                    <div class="${headerColor} text-white px-2 py-1 h-[20%] flex items-center transition-colors">
+                        <div id="qr-${product.id}-NORMAL" class="h-full aspect-square bg-white mr-2 flex items-center justify-center p-1 overflow-hidden"></div>
+                        <div class="flex-1 font-bold leading-tight line-clamp-3 text-[13px] uppercase">${product.name}</div>
+                    </div>
+                    <div class="flex-1 flex flex-col w-full bg-white overflow-hidden border-b border-gray-400">
+                        ${specsHTML}
+                    </div>
+                    <div class="h-[18%] flex bg-white relative">
+                        <div class="w-[35%] flex flex-col justify-center px-1 border-r border-gray-200">
+                            <div class="text-[10px] font-mono font-bold text-gray-500 text-center break-all leading-tight">${product.code}</div>
+                            <div class="text-[9px] font-bold text-blue-600 text-center uppercase border rounded bg-blue-50 mt-0.5">BH: ${product.warranty}</div>
+                        </div>
+                        <div class="flex-1 flex flex-col items-center justify-center bg-yellow-50 relative overflow-hidden">
+                            ${campaignBadgeHTML}
+                            <div class="${priceFontSize} font-black text-red-600 leading-none tracking-tighter">${formatPrice(price)}</div>
+                            ${(isFlash || isGV) ? `<div class="text-[10px] text-gray-400 line-through absolute bottom-0.5 right-2">${formatPrice(product.price)}</div>` : ''}
+                        </div>
                     </div>
                 </div>
             </div>`;
@@ -871,60 +1026,83 @@
 
         // --- NEW SMALL STICKER DESIGN (UPDATED) ---
         function generateSmallStickerHTML(product) {
-            const isFlash = campaign === 'FL';
-            const isGV = campaign === 'GV';
+            // Check global campaign AND exclusion list
+            const isCampaignActive = campaign !== 'NONE' && !excludedCampaignIds.has(product.id);
+            const isFlash = isCampaignActive && campaign === 'FL';
+            const isGV = isCampaignActive && campaign === 'GV';
+
             const price = (isFlash || isGV) && product.salePrice ? product.salePrice : product.price;
             
             const headerBgStyle = `background-color: ${bgNameColor};`;
             
             // Logic to display campaign text
-            const campaignText = product.campaignName || (isFlash ? 'FLASH SALE' : (isGV ? 'GIÁ SỐC' : ''));
+            let campaignText = '';
+            if (isCampaignActive) {
+                campaignText = product.campaignName || (isFlash ? 'FLASH SALE' : (isGV ? 'GIÁ SỐC' : ''));
+            }
 
-            // Campaign Header (Row 1)
+            // Campaign Header (Row 1) - Only Show if Active
             const campaignHeader = campaignText 
                 ? `<div class="bg-yellow-400 text-red-700 font-black text-[9px] text-center uppercase tracking-wider py-0.5 border-b border-black leading-none w-full">${campaignText}</div>` 
                 : '';
 
+            // Checkbox State
+            const isChecked = !excludedCampaignIds.has(product.id);
+            const campaignToggleHTML = campaign !== 'NONE' ? `
+                <div class="toggle-campaign-wrapper hover-edit-overlay" onclick="event.stopPropagation(); toggleItemCampaign('${product.id}')" title="Bật/Tắt giá khuyến mãi cho tem này">
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} class="pointer-events-none w-3 h-3 text-blue-600 rounded">
+                    <span>CTKM</span>
+                </div>
+            ` : '';
+
             return `
-            <div onclick="openEditModal('${product.id}')" class="w-full h-full bg-white flex flex-col overflow-hidden text-xs relative group cursor-pointer border border-black transition-all sticker-wrapper" title="Nhấn để chỉnh sửa">
-                
-                <!-- Hover Overlay -->
-                <div class="absolute inset-0 bg-blue-500/10 hidden group-hover:flex items-center justify-center z-50 hover-edit-overlay pointer-events-none">
-                     <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-lg font-bold flex items-center gap-1"><i data-lucide="edit-2" class="w-3 h-3"></i> Sửa</span>
-                </div>
+            <div class="relative w-full h-full">
+                <!-- DELETE BUTTON (Hidden on Print) -->
+                <div class="btn-delete-sticker hover-edit-overlay" onclick="event.stopPropagation(); removeIdFromSelection('${product.id}')" title="Xóa khỏi list in">X</div>
 
-                <!-- 1. CAMPAIGN (Full Width) -->
-                ${campaignHeader}
+                 <!-- CAMPAIGN TOGGLE (Hidden on Print) -->
+                ${campaignToggleHTML}
 
-                <!-- 2. NAME (Full Width) -->
-                <div class="text-white font-bold text-[10px] px-1 py-0.5 text-center leading-tight flex items-center justify-center h-[28%] overflow-hidden w-full border-b border-black" style="${headerBgStyle}">
-                    <span class="line-clamp-2 uppercase">${product.name}</span>
-                </div>
-
-                <!-- 3. BODY (Split Left/Right) -->
-                <div class="flex-1 flex flex-row w-full min-h-0">
-                    <!-- LEFT: Price (Top) + Code (Bottom) -->
-                    <div class="flex-1 flex flex-col border-r border-black min-w-0">
-                        <!-- Price -->
-                        <div class="flex-1 flex flex-col items-center justify-center bg-white p-0.5">
-                            <div class="text-2xl font-black text-red-600 leading-none tracking-tighter truncate w-full text-center">${formatPrice(price)}</div>
-                            ${(isFlash || isGV) ? `<div class="text-[9px] text-gray-400 line-through leading-none mt-0.5">${formatPrice(product.price)}</div>` : ''}
-                        </div>
-                        <!-- Code -->
-                        <div class="border-t border-black px-1 py-0.5 bg-gray-50 text-center min-h-[16px] flex items-center justify-center">
-                             <span class="font-mono font-bold text-gray-700 text-[9px] leading-none break-words whitespace-normal w-full line-clamp-2">${product.code}</span>
-                        </div>
+                <div onclick="openEditModal('${product.id}')" class="w-full h-full bg-white flex flex-col overflow-hidden text-xs relative group cursor-pointer border border-black transition-all sticker-wrapper" title="Nhấn để chỉnh sửa">
+                    
+                    <!-- Hover Overlay -->
+                    <div class="absolute inset-0 bg-blue-500/10 hidden group-hover:flex items-center justify-center z-50 hover-edit-overlay pointer-events-none">
+                         <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-lg font-bold flex items-center gap-1"><i data-lucide="edit-2" class="w-3 h-3"></i> Sửa</span>
                     </div>
 
-                    <!-- RIGHT: QR (Top) + Warranty (Bottom) -->
-                    <div class="w-[28%] flex flex-col min-w-[36px]">
-                        <!-- QR -->
-                        <div class="flex-1 flex items-center justify-center p-0.5 overflow-hidden qr-container">
-                             <div id="qr-${product.id}-SMALL" class="w-full h-full flex items-center justify-center"></div>
+                    <!-- 1. CAMPAIGN (Full Width) -->
+                    ${campaignHeader}
+
+                    <!-- 2. NAME (Full Width) -->
+                    <div class="text-white font-bold text-[10px] px-1 py-0.5 text-center leading-tight flex items-center justify-center h-[28%] overflow-hidden w-full border-b border-black" style="${headerBgStyle}">
+                        <span class="line-clamp-2 uppercase">${product.name}</span>
+                    </div>
+
+                    <!-- 3. BODY (Split Left/Right) -->
+                    <div class="flex-1 flex flex-row w-full min-h-0">
+                        <!-- LEFT: Price (Top) + Code (Bottom) -->
+                        <div class="flex-1 flex flex-col border-r border-black min-w-0">
+                            <!-- Price -->
+                            <div class="flex-1 flex flex-col items-center justify-center bg-white p-0.5">
+                                <div class="text-2xl font-black text-red-600 leading-none tracking-tighter truncate w-full text-center">${formatPrice(price)}</div>
+                                ${(isFlash || isGV) ? `<div class="text-[9px] text-gray-400 line-through leading-none mt-0.5">${formatPrice(product.price)}</div>` : ''}
+                            </div>
+                            <!-- Code -->
+                            <div class="border-t border-black px-1 py-0.5 bg-gray-50 text-center min-h-[16px] flex items-center justify-center">
+                                 <span class="font-mono font-bold text-gray-700 text-[9px] leading-none break-words whitespace-normal w-full line-clamp-2">${product.code}</span>
+                            </div>
                         </div>
-                        <!-- Warranty -->
-                        <div class="border-t border-black px-0.5 py-0.5 text-center min-h-[16px] flex items-center justify-center bg-blue-50">
-                             <span class="text-[8px] font-bold text-blue-600 leading-none whitespace-nowrap scale-95 transform">BH: ${product.warranty.replace(' Tháng','T')}</span>
+
+                        <!-- RIGHT: QR (Top) + Warranty (Bottom) -->
+                        <div class="w-[28%] flex flex-col min-w-[36px]">
+                            <!-- QR -->
+                            <div class="flex-1 flex items-center justify-center p-0.5 overflow-hidden qr-container">
+                                 <div id="qr-${product.id}-SMALL" class="w-full h-full flex items-center justify-center"></div>
+                            </div>
+                            <!-- Warranty -->
+                            <div class="border-t border-black px-0.5 py-0.5 text-center min-h-[16px] flex items-center justify-center bg-blue-50">
+                                 <span class="text-[8px] font-bold text-blue-600 leading-none whitespace-nowrap scale-95 transform">BH: ${product.warranty.replace(' Tháng','T')}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -936,10 +1114,13 @@
             const p = database.find(x => x.id === id);
             if (!p) return;
             
+            // Generate rows with Delete button
             const specsInputs = p.specs.map((s, i) => `
-                <div class="flex gap-2 items-center mb-2">
-                    <input class="w-1/3 border p-1 rounded text-sm bg-gray-50" value="${s.label}" id="spec-lbl-${i}">
-                    <input class="flex-1 border p-1 rounded text-sm font-bold" value="${s.value}" id="spec-val-${i}">
+                <div class="flex gap-2 items-center mb-2 spec-row">
+                    <input type="hidden" class="spec-icon" value="${s.icon}">
+                    <input class="w-1/3 border p-1 rounded text-sm bg-gray-50 spec-label" value="${s.label}" placeholder="Tên thông số">
+                    <input class="flex-1 border p-1 rounded text-sm font-bold spec-value" value="${s.value}" placeholder="Giá trị">
+                    <button onclick="this.parentElement.remove()" class="text-red-500 p-1 hover:bg-red-100 rounded" title="Xóa dòng này"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                 </div>
             `).join('');
 
@@ -964,8 +1145,13 @@
 
                     <div><label class="text-xs font-bold text-gray-500">Khuyến Mãi Text</label><input id="edit-campaign" class="w-full border p-2 rounded" value="${p.campaignName || ''}" placeholder="VD: SALE 9/9"></div>
                     <div class="border-t pt-3">
-                        <label class="font-bold mb-2 block">Thông số kỹ thuật</label>
-                        ${specsInputs}
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="font-bold">Thông số kỹ thuật</label>
+                            <button onclick="addSpecRow()" class="text-sm text-blue-600 font-bold flex items-center gap-1 hover:underline"><i data-lucide="plus" class="w-3 h-3"></i> Thêm thông số</button>
+                        </div>
+                        <div id="specs-container">
+                            ${specsInputs}
+                        </div>
                     </div>
                 </div>
                 <div class="p-4 border-t bg-gray-50 flex justify-end gap-2">
@@ -974,6 +1160,21 @@
                 </div>
             `;
             showModal(html);
+        }
+
+        // Function to add a new spec row
+        function addSpecRow() {
+            const container = document.getElementById('specs-container');
+            const div = document.createElement('div');
+            div.className = 'flex gap-2 items-center mb-2 spec-row';
+            div.innerHTML = `
+                <input type="hidden" class="spec-icon" value="info">
+                <input class="w-1/3 border p-1 rounded text-sm bg-gray-50 spec-label" value="" placeholder="Tên thông số">
+                <input class="flex-1 border p-1 rounded text-sm font-bold spec-value" value="" placeholder="Giá trị">
+                <button onclick="this.parentElement.remove();" class="text-red-500 p-1 hover:bg-red-100 rounded"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            `;
+            container.appendChild(div);
+            lucide.createIcons();
         }
 
         // --- NEW: QUICK SELECT MODAL ---
@@ -1016,6 +1217,7 @@
             
             if (!keepCurrent) {
                 selectedIds.clear();
+                excludedCampaignIds.clear(); // Reset campaign exclusions if starting fresh
             }
 
             let foundCount = 0;
@@ -1079,12 +1281,20 @@
             // SAVE NEW LINK FIELD
             p.link = document.getElementById('edit-link').value;
             
-            p.specs.forEach((s, i) => {
-                const lbl = document.getElementById(`spec-lbl-${i}`);
-                const val = document.getElementById(`spec-val-${i}`);
-                if (lbl && val) {
-                    s.label = lbl.value;
-                    s.value = val.value;
+            // Reconstruct specs array from DOM inputs
+            p.specs = [];
+            const rows = document.querySelectorAll('#specs-container .spec-row');
+            rows.forEach(row => {
+                const label = row.querySelector('.spec-label').value;
+                const value = row.querySelector('.spec-value').value;
+                const icon = row.querySelector('.spec-icon').value || 'info';
+                
+                if (label.trim() || value.trim()) {
+                    p.specs.push({
+                        label: label,
+                        value: value,
+                        icon: icon
+                    });
                 }
             });
 
@@ -1308,26 +1518,19 @@
 
         // --- 8. PDF EXPORT ---
         async function exportToPDF() {
-            const printArea = document.getElementById('print-area');
-            if (!printArea || printArea.children.length === 0) {
+            const pages = document.querySelectorAll('.print-page');
+            if (pages.length === 0) {
                 showToast('Không có nội dung để xuất PDF', 'error');
                 return;
             }
 
             showToast('Đang tạo PDF, vui lòng chờ...');
             
-            const originalTransform = printArea.style.transform;
-            printArea.style.transform = 'scale(1)'; 
+            // Toggle exporting state to clean up UI (hide borders, shadows, buttons)
+            document.body.classList.add('is-exporting');
             
             try {
-                const canvas = await html2canvas(printArea, {
-                    scale: 2, 
-                    useCORS: true,
-                    logging: false,
-                    backgroundColor: '#ffffff' 
-                });
-
-                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                // Initialize PDF
                 const pdf = new jspdf.jsPDF({
                     orientation: 'portrait',
                     unit: 'mm',
@@ -1335,16 +1538,31 @@
                 });
 
                 const imgWidth = 210;
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                const pageHeight = 297;
 
-                pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+                // Process each page individually
+                for (let i = 0; i < pages.length; i++) {
+                    if (i > 0) pdf.addPage();
+                    
+                    const canvas = await html2canvas(pages[i], {
+                        scale: 2, // High quality
+                        useCORS: true,
+                        logging: false,
+                        backgroundColor: '#ffffff'
+                    });
+
+                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                    // Add image to full A4 page
+                    pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, pageHeight);
+                }
+
                 pdf.save(`PrintStar_${new Date().getTime()}.pdf`);
                 showToast('Xuất PDF thành công!');
             } catch (err) {
                 console.error(err);
                 showToast('Lỗi khi tạo PDF', 'error');
             } finally {
-                printArea.style.transform = originalTransform;
+                document.body.classList.remove('is-exporting');
             }
         }
 
