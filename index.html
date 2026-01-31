@@ -962,12 +962,13 @@
                     const cell = document.createElement('div');
                     cell.className = "flex items-center justify-center break-inside-avoid relative";
                     
-                    // NEW DIMENSIONS: 9.5cm x 8.5cm for Big (Updated Request)
-                    // 95mm width + 95mm width = 190mm (A4 is 210mm, so 10mm margin each side - Perfect)
-                    cell.style.width = isNormal ? '95mm' : '68mm';
-                    cell.style.height = isNormal ? '85mm' : '36mm';
-                    // Reduce padding inside cell to allow more content space for bigger size
-                    cell.style.padding = '2mm';
+                    // NEW DIMENSIONS: 102mm x 90mm for Big (Compensating for browser scaling)
+                    // If scaled 0.95 -> ~97mm width.
+                    // 102mm * 2 = 204mm (fits A4 210mm safely)
+                    cell.style.width = isNormal ? '102mm' : '68mm';
+                    cell.style.height = isNormal ? '90mm' : '36mm';
+                    // Reduce padding to 0 for maximum size inside cell
+                    cell.style.padding = isNormal ? '0' : '2mm';
 
                     if (isNormal) {
                         cell.innerHTML = generateNormalStickerHTML(product);
@@ -1656,8 +1657,8 @@
                     sandbox.removeChild(pageClone);
                     
                     // 7. YIELD TO MAIN THREAD (CRITICAL FIX FOR FREEZING)
-                    // Increased delay to 100ms to ensure browser UI thread catches up
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    // Increased delay to 800ms to ensure browser UI thread catches up
+                    await new Promise(resolve => setTimeout(resolve, 800));
                 }
 
                 pdf.save(`PrintStar_${new Date().toISOString().slice(0,10)}.pdf`);
