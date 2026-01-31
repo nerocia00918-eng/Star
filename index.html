@@ -712,19 +712,31 @@
         function showToast(msg, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
-            const color = type === 'success' ? 'border-green-500 text-green-700' : 'border-red-500 text-red-700';
-            const icon = type === 'success' ? 'check-circle' : 'alert-circle';
+            const color = type === 'success' ? 'border-green-500 text-green-700' : 'border-red-500 text-red-700'; // Fixed color logic
+            if (type === 'info') {
+                 // Info style
+                 toast.className = `bg-blue-50 border-l-4 border-blue-500 text-blue-700 shadow-lg rounded p-4 flex items-center gap-3 min-w-[300px] animate-[slideIn_0.3s_ease-out]`;
+            } else {
+                 toast.className = `bg-white border-l-4 ${color} shadow-lg rounded p-4 flex items-center gap-3 min-w-[300px] animate-[slideIn_0.3s_ease-out]`;
+            }
             
-            toast.className = `bg-white border-l-4 ${color} shadow-lg rounded p-4 flex items-center gap-3 min-w-[300px] animate-[slideIn_0.3s_ease-out]`;
-            toast.innerHTML = `<i data-lucide="${icon}"></i> <div class="font-bold text-sm">${msg}</div>`;
+            const icon = type === 'success' ? 'check-circle' : (type === 'info' ? 'loader' : 'alert-circle');
+            const spinClass = type === 'info' ? 'animate-spin' : '';
+            
+            toast.innerHTML = `<i data-lucide="${icon}" class="${spinClass}"></i> <div class="font-bold text-sm">${msg}</div>`;
             
             container.appendChild(toast);
             lucide.createIcons();
             
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
+            // If info/loading, don't auto hide immediately, let caller handle or set long timeout
+            if (type !== 'info') {
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
+            
+            return toast; // Return element to allow removal
         }
 
         function showModal(contentHTML) {
@@ -1558,19 +1570,32 @@
             input.value = '';
         }
 
-        // --- 8. PDF EXPORT ---
+        // --- 8. PDF EXPORT (OPTIMIZED - SANDBOX METHOD) ---
         async function exportToPDF() {
-            const pages = document.querySelectorAll('.print-page');
+            const pages = Array.from(document.querySelectorAll('.print-page'));
             if (pages.length === 0) {
                 showToast('Không có nội dung để xuất PDF', 'error');
                 return;
             }
 
-            showToast('Đang tạo PDF, vui lòng chờ...');
+            const loadingToast = showToast(`Đang chuẩn bị 1/${pages.length}...`, 'info');
             
-            // Toggle exporting state to clean up UI (hide borders, shadows, buttons)
-            document.body.classList.add('is-exporting');
+            // Toggle exporting state but do NOT hide main containers via CSS (controlled by is-exporting class which we removed for safety)
+            // Instead, use a sandbox approach.
             
+            // 1. Create a "Sandbox" container that is visible to the browser engine but hidden from user.
+            // This ensures full rendering without interference from scrollbars or flex layouts.
+            const sandbox = document.createElement('div');
+            sandbox.id = 'pdf-sandbox';
+            sandbox.style.position = 'fixed';
+            sandbox.style.left = '-10000px';
+            sandbox.style.top = '0';
+            sandbox.style.width = '210mm'; // Standard A4
+            // No height restriction to allow full capture
+            sandbox.style.zIndex = '-9999';
+            sandbox.style.background = '#ffffff'; // Ensure white background
+            document.body.appendChild(sandbox);
+
             try {
                 // Initialize PDF
                 const pdf = new jspdf.jsPDF({
@@ -1584,27 +1609,66 @@
 
                 // Process each page individually
                 for (let i = 0; i < pages.length; i++) {
-                    if (i > 0) pdf.addPage();
+                    // Update progress
+                    loadingToast.querySelector('.font-bold').textContent = `Đang xử lý trang ${i + 1}/${pages.length}...`;
                     
-                    const canvas = await html2canvas(pages[i], {
-                        scale: 2, // High quality
+                    // 2. Clone the page to the sandbox
+                    // Deep clone to get all elements
+                    const pageClone = pages[i].cloneNode(true);
+                    
+                    // Reset styling on clone to force standard A4 appearance
+                    // Remove potential margin interference
+                    pageClone.style.margin = '0';
+                    pageClone.style.boxShadow = 'none';
+                    pageClone.style.transform = 'none';
+                    pageClone.style.width = '210mm';
+                    pageClone.style.height = '297mm';
+                    pageClone.style.display = 'block';
+                    
+                    // Remove the delete/campaign overlays from clone explicitly
+                    const overlays = pageClone.querySelectorAll('.btn-delete-sticker, .toggle-campaign-wrapper');
+                    overlays.forEach(el => el.remove());
+
+                    sandbox.appendChild(pageClone);
+
+                    // 3. Wait for DOM to settle (crucial for images/fonts)
+                    await new Promise(resolve => setTimeout(resolve, 50));
+
+                    // 4. Capture with html2canvas
+                    const canvas = await html2canvas(pageClone, {
+                        scale: 2, // 2 is good balance for A4
                         useCORS: true,
                         logging: false,
-                        backgroundColor: '#ffffff'
+                        backgroundColor: '#ffffff',
+                        windowWidth: 210 * 3.7795, // Force width to match A4 px approx
                     });
 
-                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
-                    // Add image to full A4 page
+                    // 5. Convert to JPEG to save memory (Default PNG is massive)
+                    const imgData = canvas.toDataURL('image/jpeg', 0.9);
+                    
+                    if (i > 0) pdf.addPage();
                     pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, pageHeight);
+
+                    // 6. Clean up sandbox immediately to free DOM memory
+                    sandbox.removeChild(pageClone);
+                    
+                    // 7. YIELD TO MAIN THREAD (CRITICAL FIX FOR FREEZING)
+                    // This allows the UI to update and prevents "Page Unresponsive"
+                    await new Promise(resolve => setTimeout(resolve, 10));
                 }
 
-                pdf.save(`PrintStar_${new Date().getTime()}.pdf`);
+                pdf.save(`PrintStar_${new Date().toISOString().slice(0,10)}.pdf`);
                 showToast('Xuất PDF thành công!');
             } catch (err) {
                 console.error(err);
-                showToast('Lỗi khi tạo PDF', 'error');
+                showToast('Lỗi khi tạo PDF: ' + err.message, 'error');
             } finally {
-                document.body.classList.remove('is-exporting');
+                // Cleanup
+                if (document.body.contains(sandbox)) {
+                    document.body.removeChild(sandbox);
+                }
+                loadingToast.style.opacity = '0';
+                setTimeout(() => loadingToast.remove(), 300);
             }
         }
 
