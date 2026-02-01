@@ -883,7 +883,7 @@
                 selectedIds.delete(id);
                 saveSystemState();
                 renderPrintArea(); // Re-render immediately
-                showToast('Đã tống cổ mã này khỏi danh sách in', 'success');
+                showToast('Đã xóa khỏi danh sách in', 'success');
                 updateCountBadge();
             }
         }
@@ -1802,7 +1802,7 @@
             const apiKey = document.getElementById('inp-api-key').value.trim();
             
             if (!apiKey) {
-                showToast('Ê Chưa nhập API Key kìa má. Nhập ở thanh bên trái kìa .. thấy hk.', 'error');
+                showToast('Vui lòng nhập API Key ở thanh cấu hình bên trái.', 'error');
                 return;
             }
 
@@ -1844,7 +1844,7 @@
                 `;
 
                 const response = await ai.models.generateContent({
-                    model: 'gemini-2.0-flash',
+                    model: 'gemini-2.0-flash', // UPDATED to stable version
                     contents: prompt,
                     config: {
                         responseMimeType: "application/json"
@@ -1880,21 +1880,28 @@
                     throw new Error("AI_NO_DATA");
                 }
 
-                showToast('Tôi điền xong rồi đó nha, mắc mệt à, bắt làm hoài!', 'success');
+                showToast('Đã tự động điền thông số thành công!', 'success');
                 
                 // Save state to keep the key
                 saveSystemState();
 
             } catch (error) {
-                console.error("AI Error:", error);
+                console.error("AI Error Detailed:", error);
                 
                 // Check specifically for API Key issues first
+                let errorMsg = "Không thể kết nối với AI. Vui lòng thử lại sau.";
+
                 if (!apiKey) {
-                    showToast('Ê... Chưa nhập API Key kìa ba!!!', 'error');
-                } else {
-                    // Default generic error for user content issues
-                    showToast("Tự tìm đi má, AI đâu phải ở đợ mà bắt làm hoài", 'error');
+                    errorMsg = 'Chưa nhập API Key!';
+                } else if (error.message) {
+                    // Show technical error so user knows what's wrong (e.g. 404 Model Not Found)
+                    errorMsg = `Lỗi AI: ${error.message}`;
+                    if(error.message.includes('404') || error.message.includes('not found')) {
+                         errorMsg = "Lỗi Model AI: Model hiện tại không khả dụng. Vui lòng kiểm tra lại Key hoặc liên hệ admin.";
+                    }
                 }
+
+                showToast(errorMsg, 'error');
             } finally {
                 btn.innerHTML = originalText;
                 lucide.createIcons();
