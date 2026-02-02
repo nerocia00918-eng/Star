@@ -190,10 +190,10 @@
 <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.4/",
     "react": "https://esm.sh/react@^19.2.4",
+    "qrcode.react": "https://esm.sh/qrcode.react@^4.2.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "qrcode.react": "https://esm.sh/qrcode.react@^4.2.0"
+    "react/": "https://esm.sh/react@^19.2.4/"
   }
 }
 </script>
@@ -468,7 +468,8 @@
 
     <!-- JAVASCRIPT LOGIC -->
     <script type="module">
-        import { GoogleGenAI } from "https://esm.sh/@google/genai";
+        // NOTE: No static import here to prevent Vercel Build Errors.
+        // We use dynamic import inside autoFillSpecs().
 
         // --- 0. STORAGE KEYS ---
         const STORAGE_KEY_DB = 'printstar_db_v1';
@@ -1814,6 +1815,10 @@
             lucide.createIcons();
 
             try {
+                // DYNAMIC IMPORT: Workaround for Vercel/Vite build process.
+                // This ensures Rollup doesn't try to bundle @google/genai during build time.
+                const { GoogleGenAI } = await import('https://esm.sh/@google/genai');
+
                 const code = document.getElementById('edit-code').value;
                 const name = document.getElementById('edit-name').value;
                 
