@@ -1841,7 +1841,7 @@
                 `;
 
                 const response = await ai.models.generateContent({
-                    model: 'gemini-3-flash-preview', 
+                    model: 'gemini-2.0-flash', 
                     contents: prompt,
                     config: {
                         responseMimeType: "application/json"
@@ -1902,7 +1902,7 @@
                 const lowerErr = errString.toLowerCase();
 
                 if (lowerErr.includes('429') || lowerErr.includes('quota') || lowerErr.includes('resource_exhausted')) {
-                    errorMsg = "⏳ AI đang bận (Hết lượt miễn phí). Vui lòng đợi 1 phút rồi thử lại.";
+                    errorMsg = "⏳ AI đang bận (Hết lượt/phút). Nếu dùng trên Vercel, hãy kiểm tra xem API Key có bị chặn tên miền (Referrer) không.";
                 } else if (lowerErr.includes('404') || lowerErr.includes('not found')) {
                      errorMsg = "❌ Lỗi Model AI (404). Kiểm tra lại cấu hình.";
                 } else if (lowerErr.includes('key') || lowerErr.includes('auth') || lowerErr.includes('permission') || lowerErr.includes('api_key_invalid')) {
