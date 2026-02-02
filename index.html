@@ -1905,12 +1905,39 @@
                 
                 const lowerErr = errString.toLowerCase();
 
+                // DETECT RESTRICTION ERROR
+                if (lowerErr.includes('403') || lowerErr.includes('400') || lowerErr.includes('key')) {
+                     // SHOW MODAL FOR RESTRICTION
+                     const restrictionHtml = `
+                        <div class="p-6 text-center">
+                            <i data-lucide="shield-alert" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+                            <h3 class="text-xl font-bold text-gray-800 mb-2">Truy cập bị chặn (400/403)</h3>
+                            <p class="text-gray-600 mb-4 text-sm">
+                                Google đã chặn tên miền này vì lý do bảo mật API Key. <br/>
+                                Bạn cần thêm tên miền Vercel vào danh sách cho phép (Restrictions).
+                            </p>
+                            <div class="bg-gray-100 p-3 rounded text-left text-xs mb-6 font-mono border border-gray-300">
+                                1. Truy cập <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-blue-600 underline font-bold">Google Cloud Console</a>.<br/>
+                                2. Sửa API Key của bạn.<br/>
+                                3. Tại mục 'Website restrictions', thêm dòng:<br/>
+                                <span class="font-bold text-blue-800 break-all">${window.location.origin}/*</span>
+                            </div>
+                            <div class="flex justify-center gap-3">
+                                <button onclick="closeModal()" class="px-4 py-2 bg-gray-200 rounded font-bold">Đóng</button>
+                                <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="px-4 py-2 bg-blue-600 text-white rounded font-bold flex items-center gap-2 hover:bg-blue-700">
+                                    <i data-lucide="external-link" class="w-4 h-4"></i> Mở trang quản lý Key
+                                </a>
+                            </div>
+                        </div>
+                     `;
+                     showModal(restrictionHtml);
+                     return; // Stop toast
+                }
+
                 if (lowerErr.includes('429') || lowerErr.includes('quota') || lowerErr.includes('resource_exhausted')) {
                     errorMsg = "⏳ AI đang bận (Hết lượt miễn phí/phút). Vui lòng đợi 1 phút rồi thử lại. Nếu dùng Vercel, hãy kiểm tra Referrer.";
                 } else if (lowerErr.includes('404') || lowerErr.includes('not found')) {
                      errorMsg = "❌ Lỗi Model AI (404). Kiểm tra lại cấu hình.";
-                } else if (lowerErr.includes('key') || lowerErr.includes('auth') || lowerErr.includes('permission') || lowerErr.includes('api_key_invalid')) {
-                     errorMsg = "🔑 API Key không hợp lệ hoặc đã hết hạn.";
                 } else if (error.message === "AI_NO_DATA") {
                     errorMsg = "⚠️ AI không tìm thấy dữ liệu phù hợp.";
                 } else {
