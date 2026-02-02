@@ -193,8 +193,7 @@
     "react/": "https://esm.sh/react@^19.2.4/",
     "react": "https://esm.sh/react@^19.2.4",
     "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "qrcode.react": "https://esm.sh/qrcode.react@^4.2.0",
-    "@google/genai": "https://esm.sh/@google/genai"
+    "qrcode.react": "https://esm.sh/qrcode.react@^4.2.0"
   }
 }
 </script>
@@ -469,7 +468,7 @@
 
     <!-- JAVASCRIPT LOGIC -->
     <script type="module">
-        import { GoogleGenAI } from "@google/genai";
+        import { GoogleGenAI } from "https://esm.sh/@google/genai";
 
         // --- 0. STORAGE KEYS ---
         const STORAGE_KEY_DB = 'printstar_db_v1';
@@ -1902,7 +1901,7 @@
                 const lowerErr = errString.toLowerCase();
 
                 if (lowerErr.includes('429') || lowerErr.includes('quota') || lowerErr.includes('resource_exhausted')) {
-                    errorMsg = "⏳ AI đang bận (Hết lượt/phút). Nếu dùng trên Vercel, hãy kiểm tra xem API Key có bị chặn tên miền (Referrer) không.";
+                    errorMsg = "⏳ AI đang bận (Hết lượt miễn phí/phút). Vui lòng đợi 1 phút rồi thử lại. Nếu dùng Vercel, hãy kiểm tra Referrer.";
                 } else if (lowerErr.includes('404') || lowerErr.includes('not found')) {
                      errorMsg = "❌ Lỗi Model AI (404). Kiểm tra lại cấu hình.";
                 } else if (lowerErr.includes('key') || lowerErr.includes('auth') || lowerErr.includes('permission') || lowerErr.includes('api_key_invalid')) {
