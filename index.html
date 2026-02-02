@@ -747,7 +747,7 @@
             const icon = type === 'success' ? 'check-circle' : (type === 'info' ? 'loader' : 'alert-circle');
             const spinClass = type === 'info' ? 'animate-spin' : '';
             
-            toast.innerHTML = `<i data-lucide="${icon}" class="${spinClass}"></i> <div class="font-bold text-sm">${msg}</div>`;
+            toast.innerHTML = `<i data-lucide="${icon}" class="${spinClass}"></i> <div class="font-bold text-sm text-wrap break-words max-w-[400px]">${msg}</div>`;
             
             container.appendChild(toast);
             lucide.createIcons();
@@ -1798,7 +1798,6 @@
 
         // --- AI LOGIC ---
         async function autoFillSpecs(id) {
-            // UPDATED: Get API Key from the input field directly
             const apiKey = document.getElementById('inp-api-key').value.trim();
             
             if (!apiKey) {
@@ -1810,27 +1809,23 @@
             const originalText = btn.innerHTML;
             
             try {
-                // 1. Get current values from DOM (most up to date)
+                // UI Loading
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> Đang suy nghĩ...`;
+                lucide.createIcons();
+
                 const code = document.getElementById('edit-code').value;
                 const name = document.getElementById('edit-name').value;
                 
-                // 2. Identify fields
                 const specRows = document.querySelectorAll('#specs-container .spec-row');
                 const fieldLabels = Array.from(specRows).map(row => row.querySelector('.spec-label').value).filter(l => l);
 
                 if (fieldLabels.length === 0) {
                      showToast('Không có trường thông tin nào để điền', 'error');
-                     return;
+                     return; 
                 }
 
-                // UI Loading
-                btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> Đang suy nghĩ...`;
-                lucide.createIcons();
-                
-                // 3. Init AI
                 const ai = new GoogleGenAI({ apiKey: apiKey });
                 
-                // 4. Prompt
                 const prompt = `
                 I am listing a computer product.
                 Product Code: ${code}
@@ -1844,7 +1839,7 @@
                 `;
 
                 const response = await ai.models.generateContent({
-                    model: 'gemini-2.0-flash', // UPDATED to stable version
+                    model: 'gemini-2.0-flash',
                     contents: prompt,
                     config: {
                         responseMimeType: "application/json"
@@ -1854,20 +1849,16 @@
                 const text = response.text;
                 let data;
                 try {
-                    // Handle potential Markdown formatting from AI
                     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
                     data = JSON.parse(cleanText);
                 } catch (e) {
-                     // Parsing failed means AI didn't return JSON (likely refused or chatted)
                     throw new Error("AI_NO_DATA");
                 }
 
                 let filledCount = 0;
-                // 5. Fill Data back into DOM
                 specRows.forEach(row => {
                     const label = row.querySelector('.spec-label').value;
                     if (data[label]) {
-                        // Flash highlight effect
                         const input = row.querySelector('.spec-value');
                         input.value = data[label];
                         input.classList.add('bg-purple-100', 'transition-colors', 'duration-500');
@@ -1881,29 +1872,65 @@
                 }
 
                 showToast('Đã tự động điền thông số thành công!', 'success');
-                
-                // Save state to keep the key
                 saveSystemState();
 
             } catch (error) {
                 console.error("AI Error Detailed:", error);
                 
-                // Check specifically for API Key issues first
                 let errorMsg = "Không thể kết nối với AI. Vui lòng thử lại sau.";
-
-                if (!apiKey) {
-                    errorMsg = 'Chưa nhập API Key!';
-                } else if (error.message) {
-                    // Show technical error so user knows what's wrong (e.g. 404 Model Not Found)
-                    errorMsg = `Lỗi AI: ${error.message}`;
-                    if(error.message.includes('404') || error.message.includes('not found')) {
-                         errorMsg = "Lỗi Model AI: Model hiện tại không khả dụng. Vui lòng kiểm tra lại Key hoặc liên hệ admin.";
+                
+                // Safely extract error string
+                let errString = "";
+                try {
+                    if (typeof error === 'string') {
+                        errString = error;
+                    } else if (error instanceof Error) {
+                        errString = error.message; 
+                        // Some SDKs hide details in other props, so try to stringify if message is short or generic
+                        if (errString.length < 50 || errString.includes('Error')) {
+                             errString += " " + JSON.stringify(error);
+                        }
+                    } else {
+                        errString = JSON.stringify(error);
                     }
+                } catch(e) {
+                    errString = String(error);
+                }
+                
+                const lowerErr = errString.toLowerCase();
+
+                // 1. Check Quota / 429
+                if (lowerErr.includes('429') || lowerErr.includes('quota') || lowerErr.includes('resource_exhausted')) {
+                    errorMsg = "⏳ AI đang bận (Hết lượt miễn phí). Vui lòng đợi 1 phút rồi thử lại.";
+                }
+                // 2. Check Model Not Found
+                else if (lowerErr.includes('404') || lowerErr.includes('not found')) {
+                     errorMsg = "❌ Lỗi Model AI (404). Kiểm tra lại cấu hình.";
+                }
+                // 3. Check Key/Auth
+                else if (lowerErr.includes('key') || lowerErr.includes('auth') || lowerErr.includes('permission') || lowerErr.includes('api_key_invalid')) {
+                     errorMsg = "🔑 API Key không hợp lệ hoặc đã hết hạn.";
+                }
+                // 4. Parsing Error
+                else if (error.message === "AI_NO_DATA") {
+                    errorMsg = "⚠️ AI không tìm thấy dữ liệu phù hợp.";
+                }
+                // 5. Fallback - Truncate long technical errors
+                else {
+                    let cleanMsg = error.message || String(error);
+                    // If it looks like a JSON dump (starts with {), hide it
+                    if (cleanMsg.trim().startsWith('{') || cleanMsg.includes('{"error":')) {
+                        cleanMsg = "Lỗi phản hồi từ Google (Xem Console).";
+                    }
+                    else if (cleanMsg.length > 80) {
+                        cleanMsg = cleanMsg.substring(0, 80) + "...";
+                    }
+                    errorMsg = `Lỗi AI: ${cleanMsg}`;
                 }
 
                 showToast(errorMsg, 'error');
             } finally {
-                btn.innerHTML = originalText;
+                if(btn) btn.innerHTML = originalText;
                 lucide.createIcons();
             }
         }
