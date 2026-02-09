@@ -286,6 +286,11 @@
                         <i data-lucide="refresh-cw" class="w-4 h-4"></i> Cập nhật giá
                     </button>
 
+                    <!-- Bulk SALE Price Update Button -->
+                    <button onclick="openBulkSaleUpdateModal()" class="text-orange-600 font-bold text-sm hover:bg-orange-100 flex items-center gap-1 whitespace-nowrap bg-orange-50 px-3 py-2 rounded-lg border border-orange-200 shadow-sm transition-all hover:shadow-md">
+                        <i data-lucide="tag" class="w-4 h-4"></i> Cập nhật Sale
+                    </button>
+
                     <!-- Search with Mode Selection -->
                     <div class="flex flex-1 gap-2 min-w-[300px]">
                         <select id="search-mode" onchange="renderTable()" class="border border-gray-300 rounded-lg px-2 text-sm bg-white focus:outline-none focus:border-blue-500 cursor-pointer">
@@ -1451,6 +1456,93 @@
             }
         }
 
+        // --- NEW: BULK SALE PRICE UPDATE MODAL ---
+        function openBulkSaleUpdateModal() {
+            const html = `
+                <div class="flex justify-between items-center p-4 border-b">
+                    <h2 class="text-xl font-bold text-orange-600 flex items-center gap-2">
+                        <i data-lucide="tag" class="w-6 h-6"></i> Cập nhật Giá Sale (Khuyến Mãi)
+                    </h2>
+                    <button onclick="closeModal()"><i data-lucide="x"></i></button>
+                </div>
+                <div class="p-6">
+                    <div class="bg-orange-50 p-3 rounded mb-4 text-sm text-orange-800 border border-orange-200">
+                        <p class="font-bold flex items-center gap-2"><i data-lucide="info" class="w-4 h-4"></i> Hướng dẫn:</p>
+                        <p class="mt-1">Copy cột <strong>Mã Sản Phẩm</strong> và cột <strong>Giá Sale</strong> từ Excel và dán vào 2 ô bên dưới tương ứng. Hệ thống sẽ cập nhật giá khuyến mãi cho các sản phẩm.</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cột Mã SP</label>
+                            <textarea id="bulk-sale-codes" class="w-full h-64 p-2 border border-orange-200 rounded focus:outline-none focus:border-orange-500 font-mono text-xs no-wrap-textarea bg-white" placeholder="V.GIGA.3060..."></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cột Giá Sale</label>
+                            <textarea id="bulk-sale-prices" class="w-full h-64 p-2 border border-orange-200 rounded focus:outline-none focus:border-orange-500 font-mono text-xs no-wrap-textarea bg-white" placeholder="4.500.000..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 border-t bg-gray-50 flex justify-end gap-2">
+                    <button onclick="closeModal()" class="px-4 py-2 bg-gray-200 rounded font-bold text-gray-600 hover:bg-gray-300">Hủy</button>
+                    <button onclick="processBulkSaleUpdate()" class="px-4 py-2 bg-orange-600 text-white rounded font-bold flex items-center gap-2 hover:bg-orange-700 shadow-lg"><i data-lucide="check-circle" class="w-4 h-4"></i> Cập Nhật Sale</button>
+                </div>
+            `;
+            showModal(html);
+        }
+
+        function processBulkSaleUpdate() {
+            const codes = parseExcelColumn(document.getElementById('bulk-sale-codes').value);
+            const prices = parseExcelColumn(document.getElementById('bulk-sale-prices').value);
+
+            if (codes.length === 0) {
+                showToast('Chưa nhập mã sản phẩm', 'error');
+                return;
+            }
+            if (prices.length === 0) {
+                showToast('Chưa nhập giá sale', 'error');
+                return;
+            }
+            if (codes.length !== prices.length) {
+                showToast(`Số lượng không khớp! Mã: ${codes.length}, Giá: ${prices.length}`, 'error');
+                return;
+            }
+
+            let updatedCount = 0;
+            let notFoundCount = 0;
+
+            for (let i = 0; i < codes.length; i++) {
+                const code = codes[i].trim();
+                const priceRaw = prices[i].trim();
+                
+                if (!code) continue;
+
+                // Find product
+                const product = database.find(p => p.code.toLowerCase() === code.toLowerCase());
+                
+                if (product) {
+                    const newSalePrice = cleanPrice(priceRaw);
+                    // Update sale price (even if 0, effectively removing sale)
+                    product.salePrice = newSalePrice;
+                    updatedCount++;
+                } else {
+                    notFoundCount++;
+                }
+            }
+
+            saveSystemState();
+            renderTable();
+            closeModal();
+
+            if (updatedCount > 0) {
+                showToast(`Đã cập nhật giá SALE cho ${updatedCount} sản phẩm!`, 'success');
+            }
+            
+            if (notFoundCount > 0) {
+                setTimeout(() => {
+                    showToast(`Có ${notFoundCount} mã không tìm thấy trong hệ thống`, 'error');
+                }, 500);
+            }
+        }
+
         function saveEdit(id) {
             const p = database.find(x => x.id === id);
             if (!p) return;
@@ -2077,6 +2169,9 @@
         // NEW EXPORTS
         window.openBulkPriceUpdateModal = openBulkPriceUpdateModal;
         window.processBulkPriceUpdate = processBulkPriceUpdate;
+        // SALE UPDATE EXPORTS
+        window.openBulkSaleUpdateModal = openBulkSaleUpdateModal;
+        window.processBulkSaleUpdate = processBulkSaleUpdate;
         window.testApiKey = testApiKey;
 
     </script>
