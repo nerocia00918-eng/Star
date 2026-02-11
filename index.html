@@ -410,6 +410,17 @@
                             <p class="text-[10px] text-gray-400 mt-1 italic">*Tắt/Mở CTKM riêng từng tem bằng cách tick vào ô vuông trên tem.</p>
                         </div>
 
+                         <!-- NEW: BULK CAMPAIGN NAME UPDATE -->
+                        <div class="border-t pt-3">
+                             <label class="text-xs font-bold text-gray-500 uppercase mb-2 block">Sửa tên CTKM (Đang chọn)</label>
+                             <div class="flex gap-2">
+                                 <input type="text" id="bulk-campaign-input" placeholder="VD: SALE 9.9" class="w-full border border-gray-300 p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                 <button onclick="bulkUpdateCampaignName()" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-3 text-xs font-bold whitespace-nowrap">
+                                     Áp dụng
+                                 </button>
+                             </div>
+                        </div>
+
                         <!-- Color Customization -->
                         <div class="border-t pt-3">
                             <label class="text-xs font-bold text-gray-500 uppercase mb-2 block">Tùy chỉnh màu (Tem nhỏ)</label>
@@ -1780,7 +1791,8 @@
                     const json = JSON.parse(e.target.result);
                     if (Array.isArray(json)) {
                         database = [...json, ...database];
-                        json.forEach(p => selectedIds.add(p.id));
+                        // Removed auto-tick logic as requested
+                        // json.forEach(p => selectedIds.add(p.id)); 
                         saveSystemState(); 
                         renderTable();
                         showToast(`Đã nhập ${json.length} sản phẩm từ file`);
@@ -2120,6 +2132,29 @@
                 showToast(errorMsg, 'error');
         }
 
+        // --- BULK CAMPAIGN NAME UPDATE ---
+        window.bulkUpdateCampaignName = function() {
+            const text = document.getElementById('bulk-campaign-input').value;
+            // Allow empty text to clear existing campaign names
+            
+            if (selectedIds.size === 0) {
+                showToast('Chưa chọn sản phẩm nào để sửa', 'warning');
+                return;
+            }
+
+            let count = 0;
+            database.forEach(p => {
+                if (selectedIds.has(p.id)) {
+                    p.campaignName = text;
+                    count++;
+                }
+            });
+
+            saveSystemState();
+            renderPrintArea(); // Update preview
+            showToast(`Đã cập nhật tên CTKM cho ${count} sản phẩm`, 'success');
+        }
+
         // Init
         window.addEventListener('DOMContentLoaded', () => {
             // LOAD FROM STORAGE
@@ -2173,6 +2208,8 @@
         window.openBulkSaleUpdateModal = openBulkSaleUpdateModal;
         window.processBulkSaleUpdate = processBulkSaleUpdate;
         window.testApiKey = testApiKey;
+        // EXPORT THE NEW BULK UPDATE FUNCTION
+        window.bulkUpdateCampaignName = window.bulkUpdateCampaignName;
 
     </script>
 </body>
