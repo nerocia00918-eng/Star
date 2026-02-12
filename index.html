@@ -209,26 +209,26 @@
         </div>
     </div>
 
-    <!-- HEADER -->
-    <header class="bg-slate-900 text-white p-4 shadow-lg sticky top-0 z-40 no-print">
+    <!-- HEADER: CHANGED TO ORANGE-600 -->
+    <header class="bg-orange-600 text-white p-4 shadow-lg sticky top-0 z-40 no-print">
         <div class="max-w-[1600px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
             <div class="flex items-center gap-3">
-                <div class="bg-red-600 p-2 rounded-lg shadow-lg">
-                    <i data-lucide="printer" class="w-6 h-6 text-white"></i>
+                <div class="bg-white p-2 rounded-lg shadow-lg">
+                    <i data-lucide="printer" class="w-6 h-6 text-orange-600"></i>
                 </div>
                 <div>
                     <h1 class="text-xl font-black tracking-tighter uppercase italic">PrintStar Pro</h1>
-                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Tin Học Ngôi Sao</p>
+                    <p class="text-[10px] text-white/90 font-bold uppercase tracking-widest">Tin Học Ngôi Sao</p>
                 </div>
             </div>
             
-            <div class="flex bg-slate-800 p-1 rounded-lg gap-1">
-                <button onclick="switchTab('DATABASE')" id="btn-tab-db" class="px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 bg-blue-600 text-white shadow transition-colors">
+            <div class="flex bg-orange-700 p-1 rounded-lg gap-1">
+                <button onclick="switchTab('DATABASE')" id="btn-tab-db" class="px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 bg-white text-orange-600 shadow transition-colors">
                     <i data-lucide="database" class="w-4 h-4"></i> Kho Dữ Liệu
                 </button>
-                <button onclick="switchTab('PRINT')" id="btn-tab-print" class="px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+                <button onclick="switchTab('PRINT')" id="btn-tab-print" class="px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 text-white/70 hover:text-white transition-colors">
                     <i data-lucide="printer" class="w-4 h-4"></i> Xem Trang In
-                    <span id="selected-count-badge" class="bg-white text-blue-800 px-1.5 rounded-full text-xs">0</span>
+                    <span id="selected-count-badge" class="bg-white text-orange-600 px-1.5 rounded-full text-xs">0</span>
                 </button>
             </div>
         </div>
@@ -281,9 +281,14 @@
                         <i data-lucide="list-checks" class="w-4 h-4"></i> Chọn theo List để in
                     </button>
 
-                     <!-- Bulk Price Update Button -->
-                    <button onclick="openBulkPriceUpdateModal()" class="text-green-700 font-bold text-sm hover:bg-green-100 flex items-center gap-1 whitespace-nowrap bg-green-50 px-3 py-2 rounded-lg border border-green-200 shadow-sm transition-all hover:shadow-md">
-                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Cập nhật giá
+                    <!-- ADDED: Deselect All Button -->
+                    <button onclick="deselectAll()" class="text-gray-600 font-bold text-sm hover:bg-gray-200 flex items-center gap-1 whitespace-nowrap bg-gray-100 px-3 py-2 rounded-lg border border-gray-300 shadow-sm transition-all hover:shadow-md" title="Bỏ tích chọn tất cả sản phẩm">
+                        <i data-lucide="square" class="w-4 h-4"></i> Bỏ chọn tất cả
+                    </button>
+
+                     <!-- Bulk Info Update Button (RENAMED FROM PRICE UPDATE) -->
+                    <button onclick="openBulkInfoUpdateModal()" class="text-green-700 font-bold text-sm hover:bg-green-100 flex items-center gap-1 whitespace-nowrap bg-green-50 px-3 py-2 rounded-lg border border-green-200 shadow-sm transition-all hover:shadow-md">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Cập nhật thông tin
                     </button>
 
                     <!-- Bulk SALE Price Update Button -->
@@ -840,11 +845,11 @@
             const btnPrint = document.getElementById('btn-tab-print');
             
             if (tab === 'DATABASE') {
-                btnDb.className = "px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 bg-blue-600 text-white shadow";
-                btnPrint.className = "px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 text-slate-400 hover:text-white";
+                btnDb.className = "px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 bg-white text-orange-600 shadow";
+                btnPrint.className = "px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 text-white/70 hover:text-white";
             } else {
-                btnDb.className = "px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 text-slate-400 hover:text-white";
-                btnPrint.className = "px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 bg-blue-600 text-white shadow";
+                btnDb.className = "px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 text-white/70 hover:text-white";
+                btnPrint.className = "px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 bg-white text-orange-600 shadow";
                 renderPrintArea();
             }
         }
@@ -899,6 +904,15 @@
             else selectedIds.add(id);
             saveSystemState(); // SAVE ON SELECTION CHANGE
             renderTable();
+        }
+
+        // NEW: Deselect All Function
+        function deselectAll() {
+            selectedIds.clear();
+            saveSystemState();
+            renderTable();
+            updateCountBadge();
+            showToast('Đã bỏ chọn tất cả');
         }
 
         function removeIdFromSelection(id) {
@@ -1376,53 +1390,56 @@
             }
         }
 
-        // --- NEW: BULK PRICE UPDATE MODAL ---
-        function openBulkPriceUpdateModal() {
+        // --- UPDATED: BULK INFO UPDATE MODAL (WAS PRICE UPDATE) ---
+        function openBulkInfoUpdateModal() {
             const html = `
                 <div class="flex justify-between items-center p-4 border-b">
                     <h2 class="text-xl font-bold text-green-700 flex items-center gap-2">
-                        <i data-lucide="refresh-cw" class="w-6 h-6"></i> Cập nhật giá hàng loạt
+                        <i data-lucide="refresh-cw" class="w-6 h-6"></i> Cập nhật thông tin hàng loạt
                     </h2>
                     <button onclick="closeModal()"><i data-lucide="x"></i></button>
                 </div>
                 <div class="p-6">
                     <div class="bg-green-50 p-3 rounded mb-4 text-sm text-green-800 border border-green-200">
                         <p class="font-bold flex items-center gap-2"><i data-lucide="info" class="w-4 h-4"></i> Hướng dẫn:</p>
-                        <p class="mt-1">Copy cột <strong>Mã Sản Phẩm</strong> và cột <strong>Giá Mới</strong> từ Excel và dán vào 2 ô bên dưới tương ứng. Số lượng dòng phải khớp nhau.</p>
+                        <p class="mt-1">Dán dữ liệu từ Excel vào 3 cột bên dưới. <strong>Số lượng dòng phải bằng nhau</strong>.</p>
+                        <p class="mt-1 text-xs text-gray-500">*Để trống tên hoặc giá nếu không muốn cập nhật trường đó (nhưng vẫn phải có dòng trống để khớp số lượng).</p>
                     </div>
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-3 gap-4">
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cột Mã SP</label>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">1. Cột Mã SP (*)</label>
                             <textarea id="bulk-update-codes" class="w-full h-64 p-2 border border-green-200 rounded focus:outline-none focus:border-green-500 font-mono text-xs no-wrap-textarea bg-white" placeholder="V.GIGA.3060..."></textarea>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cột Giá Mới</label>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">2. Cột Tên Mới</label>
+                            <textarea id="bulk-update-names" class="w-full h-64 p-2 border border-green-200 rounded focus:outline-none focus:border-green-500 font-mono text-xs no-wrap-textarea bg-white" placeholder="Tên sản phẩm mới..."></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">3. Cột Giá Mới</label>
                             <textarea id="bulk-update-prices" class="w-full h-64 p-2 border border-green-200 rounded focus:outline-none focus:border-green-500 font-mono text-xs no-wrap-textarea bg-white" placeholder="5.500.000..."></textarea>
                         </div>
                     </div>
                 </div>
                 <div class="p-4 border-t bg-gray-50 flex justify-end gap-2">
                     <button onclick="closeModal()" class="px-4 py-2 bg-gray-200 rounded font-bold text-gray-600 hover:bg-gray-300">Hủy</button>
-                    <button onclick="processBulkPriceUpdate()" class="px-4 py-2 bg-green-600 text-white rounded font-bold flex items-center gap-2 hover:bg-green-700 shadow-lg"><i data-lucide="check-circle" class="w-4 h-4"></i> Cập Nhật Giá</button>
+                    <button onclick="processBulkInfoUpdate()" class="px-4 py-2 bg-green-600 text-white rounded font-bold flex items-center gap-2 hover:bg-green-700 shadow-lg"><i data-lucide="check-circle" class="w-4 h-4"></i> Cập Nhật</button>
                 </div>
             `;
             showModal(html);
         }
 
-        function processBulkPriceUpdate() {
+        function processBulkInfoUpdate() {
             const codes = parseExcelColumn(document.getElementById('bulk-update-codes').value);
+            const names = parseExcelColumn(document.getElementById('bulk-update-names').value);
             const prices = parseExcelColumn(document.getElementById('bulk-update-prices').value);
 
             if (codes.length === 0) {
                 showToast('Chưa nhập mã sản phẩm', 'error');
                 return;
             }
-            if (prices.length === 0) {
-                showToast('Chưa nhập giá mới', 'error');
-                return;
-            }
-            if (codes.length !== prices.length) {
-                showToast(`Số lượng không khớp! Mã: ${codes.length}, Giá: ${prices.length}`, 'error');
+            // Ensure alignment
+            if (codes.length !== prices.length || codes.length !== names.length) {
+                showToast(`Lỗi: Số lượng dòng không khớp! (Mã: ${codes.length}, Tên: ${names.length}, Giá: ${prices.length})`, 'error');
                 return;
             }
 
@@ -1431,21 +1448,28 @@
 
             for (let i = 0; i < codes.length; i++) {
                 const code = codes[i].trim();
+                const nameRaw = names[i].trim();
                 const priceRaw = prices[i].trim();
                 
                 if (!code) continue;
 
-                // Find product
                 const product = database.find(p => p.code.toLowerCase() === code.toLowerCase());
                 
                 if (product) {
+                    let changed = false;
+                    // Update Name if provided
+                    if (nameRaw) {
+                        product.name = nameRaw;
+                        changed = true;
+                    }
+                    // Update Price if provided and valid
                     const newPrice = cleanPrice(priceRaw);
                     if (newPrice > 0) {
                         product.price = newPrice;
-                        // Optional: Reset sale price or update logic? For now, we update List Price.
-                        // product.salePrice = newPrice * 0.9; // Maybe? Keep it simple for now.
-                        updatedCount++;
+                        changed = true;
                     }
+
+                    if (changed) updatedCount++;
                 } else {
                     notFoundCount++;
                 }
@@ -1456,11 +1480,10 @@
             closeModal();
 
             if (updatedCount > 0) {
-                showToast(`Đã cập nhật giá cho ${updatedCount} sản phẩm!`, 'success');
+                showToast(`Đã cập nhật thông tin cho ${updatedCount} sản phẩm!`, 'success');
             }
             
             if (notFoundCount > 0) {
-                // Delay slightly to let success toast show first if any
                 setTimeout(() => {
                     showToast(`Có ${notFoundCount} mã không tìm thấy trong hệ thống`, 'error');
                 }, 500);
@@ -2181,6 +2204,7 @@
         window.switchTab = switchTab;
         window.renderTable = renderTable;
         window.toggleSelect = toggleSelect;
+        window.deselectAll = deselectAll; // Export deselectAll
         window.removeIdFromSelection = removeIdFromSelection;
         window.toggleItemCampaign = toggleItemCampaign;
         window.toggleSelectAll = toggleSelectAll;
@@ -2202,8 +2226,8 @@
         window.processQuickSelect = processQuickSelect;
         window.autoFillSpecs = autoFillSpecs;
         // NEW EXPORTS
-        window.openBulkPriceUpdateModal = openBulkPriceUpdateModal;
-        window.processBulkPriceUpdate = processBulkPriceUpdate;
+        window.openBulkInfoUpdateModal = openBulkInfoUpdateModal; // Changed from Price Update
+        window.processBulkInfoUpdate = processBulkInfoUpdate;     // Changed from Price Update
         // SALE UPDATE EXPORTS
         window.openBulkSaleUpdateModal = openBulkSaleUpdateModal;
         window.processBulkSaleUpdate = processBulkSaleUpdate;
