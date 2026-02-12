@@ -1402,8 +1402,8 @@
                 <div class="p-6">
                     <div class="bg-green-50 p-3 rounded mb-4 text-sm text-green-800 border border-green-200">
                         <p class="font-bold flex items-center gap-2"><i data-lucide="info" class="w-4 h-4"></i> Hướng dẫn:</p>
-                        <p class="mt-1">Dán dữ liệu từ Excel vào 3 cột bên dưới. <strong>Số lượng dòng phải bằng nhau</strong>.</p>
-                        <p class="mt-1 text-xs text-gray-500">*Để trống tên hoặc giá nếu không muốn cập nhật trường đó (nhưng vẫn phải có dòng trống để khớp số lượng).</p>
+                        <p class="mt-1">Dán cột <strong>Mã SP</strong>. Sau đó dán cột <strong>Tên Mới</strong> HOẶC <strong>Giá Mới</strong> (hoặc cả hai).</p>
+                        <p class="mt-1 text-xs text-gray-500">*Cột nào không muốn sửa thì để trống. Nếu dán thì số dòng phải khớp với cột Mã.</p>
                     </div>
                     <div class="grid grid-cols-3 gap-4">
                         <div>
@@ -1437,9 +1437,21 @@
                 showToast('Chưa nhập mã sản phẩm', 'error');
                 return;
             }
-            // Ensure alignment
-            if (codes.length !== prices.length || codes.length !== names.length) {
-                showToast(`Lỗi: Số lượng dòng không khớp! (Mã: ${codes.length}, Tên: ${names.length}, Giá: ${prices.length})`, 'error');
+
+            // Check if at least one update column is provided
+            if (names.length === 0 && prices.length === 0) {
+                 showToast('Vui lòng nhập Tên mới hoặc Giá mới để cập nhật', 'warning');
+                 return;
+            }
+
+            // Validate Names if present
+            if (names.length > 0 && names.length !== codes.length) {
+                showToast(`Lỗi: Số lượng Tên (${names.length}) không khớp Mã (${codes.length}). Nếu không sửa Tên, hãy xóa trắng ô Tên.`, 'error');
+                return;
+            }
+            // Validate Prices if present
+            if (prices.length > 0 && prices.length !== codes.length) {
+                showToast(`Lỗi: Số lượng Giá (${prices.length}) không khớp Mã (${codes.length}). Nếu không sửa Giá, hãy xóa trắng ô Giá.`, 'error');
                 return;
             }
 
@@ -1448,25 +1460,27 @@
 
             for (let i = 0; i < codes.length; i++) {
                 const code = codes[i].trim();
-                const nameRaw = names[i].trim();
-                const priceRaw = prices[i].trim();
-                
                 if (!code) continue;
 
+                const nameRaw = (names.length > 0) ? (names[i] || '').trim() : '';
+                const priceRaw = (prices.length > 0) ? (prices[i] || '').trim() : '';
+                
                 const product = database.find(p => p.code.toLowerCase() === code.toLowerCase());
                 
                 if (product) {
                     let changed = false;
-                    // Update Name if provided
-                    if (nameRaw) {
-                        product.name = nameRaw;
-                        changed = true;
+                    // Update Name logic
+                    if (names.length > 0 && nameRaw) {
+                         product.name = nameRaw;
+                         changed = true;
                     }
-                    // Update Price if provided and valid
-                    const newPrice = cleanPrice(priceRaw);
-                    if (newPrice > 0) {
-                        product.price = newPrice;
-                        changed = true;
+                    // Update Price logic
+                    if (prices.length > 0 && priceRaw) {
+                        const newPrice = cleanPrice(priceRaw);
+                        if (newPrice > 0) {
+                            product.price = newPrice;
+                            changed = true;
+                        }
                     }
 
                     if (changed) updatedCount++;
@@ -1474,7 +1488,7 @@
                     notFoundCount++;
                 }
             }
-
+            
             saveSystemState();
             renderTable();
             closeModal();
