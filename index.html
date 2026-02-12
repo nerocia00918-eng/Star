@@ -15,6 +15,7 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
         body { font-family: 'Roboto', sans-serif; }
+        html { scroll-behavior: smooth; }
         
         /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -41,7 +42,7 @@
             }
 
             /* Hide UI elements */
-            .no-print, header, #toast-container, #modal-overlay, .hover-edit-overlay, .btn-delete-sticker, .toggle-campaign-wrapper { 
+            .no-print, header, #toast-container, #modal-overlay, .hover-edit-overlay, .btn-delete-sticker, .toggle-campaign-wrapper, #floating-scroll-nav { 
                 display: none !important; 
             }
             
@@ -185,6 +186,10 @@
             cursor: pointer;
         }
         .toggle-campaign-wrapper:hover { background: #f9fafb; }
+        
+        /* Sortable Header Styles */
+        th.sortable { cursor: pointer; user-select: none; }
+        th.sortable:hover { background-color: #f3f4f6; }
     </style>
 <script type="importmap">
 {
@@ -197,10 +202,20 @@
 }
 </script>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col text-gray-800">
+<body class="bg-gray-100 min-h-screen flex flex-col text-gray-800 relative">
 
     <!-- TOAST CONTAINER -->
-    <div id="toast-container" class="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 no-print"></div>
+    <div id="toast-container" class="fixed bottom-4 left-4 z-[9999] flex flex-col gap-2 no-print"></div>
+
+    <!-- FLOATING SCROLL NAVIGATION -->
+    <div id="floating-scroll-nav" class="fixed top-1/2 right-4 -translate-y-1/2 flex flex-col gap-2 z-[9900] no-print">
+        <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" class="w-10 h-10 bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-orange-600 transition-colors border-2 border-white" title="Lên đầu trang">
+            <i data-lucide="arrow-up" class="w-6 h-6"></i>
+        </button>
+        <button onclick="window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'})" class="w-10 h-10 bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-orange-600 transition-colors border-2 border-white" title="Xuống cuối trang">
+            <i data-lucide="arrow-down" class="w-6 h-6"></i>
+        </button>
+    </div>
 
     <!-- CONFIRM/EDIT MODAL OVERLAY -->
     <div id="modal-overlay" class="fixed inset-0 bg-black/50 z-[5000] hidden flex items-center justify-center no-print backdrop-blur-sm">
@@ -210,8 +225,8 @@
     </div>
 
     <!-- HEADER: CHANGED TO ORANGE-600 -->
-    <header class="bg-orange-600 text-white p-4 shadow-lg sticky top-0 z-40 no-print">
-        <div class="max-w-[1600px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+    <header class="bg-orange-600 text-white p-4 shadow-lg sticky top-0 z-40 no-print h-[72px] flex items-center">
+        <div class="max-w-[1600px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4 w-full">
             <div class="flex items-center gap-3">
                 <div class="bg-white p-2 rounded-lg shadow-lg">
                     <i data-lucide="printer" class="w-6 h-6 text-orange-600"></i>
@@ -367,14 +382,31 @@
             <!-- Data Table -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead class="bg-gray-50 text-gray-600 text-sm font-bold uppercase tracking-wider">
+                    <table class="w-full text-left border-collapse relative">
+                        <thead class="bg-gray-50 text-gray-600 text-sm font-bold uppercase tracking-wider border-b border-gray-200 shadow-sm">
                             <tr>
-                                <th class="p-4 w-12 text-center border-b"><input type="checkbox" id="check-all" onchange="toggleSelectAll()" class="w-4 h-4 cursor-pointer"></th>
-                                <th class="p-4 border-b">Mã SP</th>
-                                <th class="p-4 border-b">Tên Sản Phẩm</th>
-                                <th class="p-4 border-b">Giá</th>
-                                <th class="p-4 border-b text-right">Thao tác</th>
+                                <!-- STICKY HEADER CONFIGURATION: Top offset accounts for main header height (72px) -->
+                                <th class="p-4 w-12 text-center sticky top-[72px] z-30 bg-gray-50"><input type="checkbox" id="check-all" onchange="toggleSelectAll()" class="w-4 h-4 cursor-pointer"></th>
+                                
+                                <th onclick="sortData('code')" class="p-4 sticky top-[72px] z-30 bg-gray-50 sortable group" title="Click để sắp xếp">
+                                    <div class="flex items-center gap-1">
+                                        Mã SP <span id="sort-icon-code" class="text-gray-400 group-hover:text-blue-500"><i data-lucide="arrow-up-down" class="w-3 h-3"></i></span>
+                                    </div>
+                                </th>
+                                
+                                <th onclick="sortData('name')" class="p-4 sticky top-[72px] z-30 bg-gray-50 sortable group" title="Click để sắp xếp">
+                                    <div class="flex items-center gap-1">
+                                        Tên Sản Phẩm <span id="sort-icon-name" class="text-gray-400 group-hover:text-blue-500"><i data-lucide="arrow-up-down" class="w-3 h-3"></i></span>
+                                    </div>
+                                </th>
+                                
+                                <th onclick="sortData('price')" class="p-4 sticky top-[72px] z-30 bg-gray-50 sortable group" title="Click để sắp xếp">
+                                    <div class="flex items-center gap-1">
+                                        Giá <span id="sort-icon-price" class="text-gray-400 group-hover:text-blue-500"><i data-lucide="arrow-up-down" class="w-3 h-3"></i></span>
+                                    </div>
+                                </th>
+                                
+                                <th class="p-4 text-right sticky top-[72px] z-30 bg-gray-50">Thao tác</th>
                             </tr>
                         </thead>
                         <tbody id="table-body" class="divide-y divide-gray-100 text-sm">
@@ -696,6 +728,9 @@
         let campaign = 'NONE';
         let promoColor = '#FFFF00';
         let bgNameColor = '#DC2626';
+        
+        // Sorting State
+        let sortConfig = { key: 'id', direction: 'asc' }; // default no sort (id is random but stable order)
 
         // --- 2. STORAGE UTILS ---
         function saveSystemState() {
@@ -854,6 +889,7 @@
             }
         }
 
+        // UPDATED RENDER TABLE WITH SORTING
         function renderTable() {
             const tbody = document.getElementById('table-body');
             const searchInput = document.getElementById('search-input');
@@ -862,7 +898,7 @@
             
             tbody.innerHTML = '';
 
-            const filtered = database.filter(p => {
+            let filtered = database.filter(p => {
                 const code = p.code.toLowerCase();
                 const name = p.name.toLowerCase();
                 
@@ -872,8 +908,47 @@
                 return code.includes(searchTerm) || name.includes(searchTerm);
             });
 
+            // --- SORTING LOGIC ---
+            if (sortConfig.key !== 'id') {
+                filtered.sort((a, b) => {
+                    let valA = a[sortConfig.key];
+                    let valB = b[sortConfig.key];
+
+                    // Handle numeric sorting for Price
+                    if (sortConfig.key === 'price') {
+                        return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+                    }
+
+                    // Handle string sorting for others
+                    valA = String(valA).toLowerCase();
+                    valB = String(valB).toLowerCase();
+                    
+                    if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+                    if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+
+            // Update Sort Icons in Header
+            ['code', 'name', 'price'].forEach(key => {
+                const iconContainer = document.getElementById(`sort-icon-${key}`);
+                if (iconContainer) {
+                    if (sortConfig.key === key) {
+                        iconContainer.innerHTML = sortConfig.direction === 'asc' 
+                            ? `<i data-lucide="arrow-up" class="w-3 h-3 text-blue-600"></i>` 
+                            : `<i data-lucide="arrow-down" class="w-3 h-3 text-blue-600"></i>`;
+                        iconContainer.className = "text-blue-600";
+                    } else {
+                        iconContainer.innerHTML = `<i data-lucide="arrow-up-down" class="w-3 h-3"></i>`;
+                        iconContainer.className = "text-gray-400 group-hover:text-blue-500";
+                    }
+                }
+            });
+
+
             if (filtered.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-gray-400">Không có dữ liệu</td></tr>`;
+                lucide.createIcons();
                 return;
             }
 
@@ -897,6 +972,19 @@
             });
             lucide.createIcons();
             updateCountBadge();
+        }
+
+        // NEW: Sort function
+        function sortData(key) {
+            if (sortConfig.key === key) {
+                // Toggle direction
+                sortConfig.direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                // New key, default asc
+                sortConfig.key = key;
+                sortConfig.direction = 'asc';
+            }
+            renderTable();
         }
 
         function toggleSelect(id) {
@@ -2248,6 +2336,7 @@
         window.testApiKey = testApiKey;
         // EXPORT THE NEW BULK UPDATE FUNCTION
         window.bulkUpdateCampaignName = window.bulkUpdateCampaignName;
+        window.sortData = sortData; // Export Sort
 
     </script>
 </body>
