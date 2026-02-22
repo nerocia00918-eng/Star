@@ -1,33 +1,76 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Printer, Settings, LayoutGrid, Grid3X3, Trash2, FileText, ShoppingTag } from 'lucide-react';
-import { PrintMode, CampaignMode } from './types';
+import { PrintMode, CampaignMode, ProductData } from './types';
 import { parseInputCodes, isSmallSize } from './utils/dataUtils';
 import { PrintLayout } from './components/PrintLayout';
+import { EditProductModal } from './components/EditProductModal';
 
-const SAMPLE_DATA = `LT.AC.NL16-71G-71UJ
-MO.LOGITECH.G102
-KB.DAREU.EK87
-HP.HAVIT.H2002D
-SS.SAMSUNG.980
-L.LG.24MP60G
-P.CORSAIR.CV650
-M.ASUS.B760M
-F.COOLMAN.120
-V.GIGA.3060
-R4.KINGSTON.8G
-CAP.HDMI.2M
-U.KINGSTON.32G`;
+const SAMPLE_DATA = ``;
 
 const App: React.FC = () => {
-  const [inputData, setInputData] = useState<string>(SAMPLE_DATA);
-  const [printMode, setPrintMode] = useState<PrintMode>(PrintMode.NORMAL);
-  const [campaign, setCampaign] = useState<CampaignMode>(CampaignMode.NONE);
+  // Load initial state from localStorage or fallback to defaults
+  const [inputData, setInputData] = useState<string>(() => {
+    return localStorage.getItem('printstar_inputData') || '';
+  });
   
-  // Auto-switch mode based on first item logic? 
-  // The user asked to choose Manually, but mentioned "Small will show model (**) etc".
-  // Let's keep manual control as primary, but maybe show a hint.
+  const [printMode, setPrintMode] = useState<PrintMode>(() => {
+    return (localStorage.getItem('printstar_printMode') as PrintMode) || PrintMode.NORMAL;
+  });
+  
+  const [campaign, setCampaign] = useState<CampaignMode>(() => {
+    return (localStorage.getItem('printstar_campaign') as CampaignMode) || CampaignMode.NONE;
+  });
 
-  const products = useMemo(() => parseInputCodes(inputData), [inputData]);
+  // Store custom overrides for products (keyed by code)
+  const [customProducts, setCustomProducts] = useState<Record<string, ProductData>>(() => {
+    const saved = localStorage.getItem('printstar_customProducts');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  const [editingProduct, setEditingProduct] = useState<ProductData | null>(null);
+
+  // Persistence Effects
+  useEffect(() => {
+    localStorage.setItem('printstar_inputData', inputData);
+  }, [inputData]);
+
+  useEffect(() => {
+    localStorage.setItem('printstar_printMode', printMode);
+  }, [printMode]);
+
+  useEffect(() => {
+    localStorage.setItem('printstar_campaign', campaign);
+  }, [campaign]);
+
+  useEffect(() => {
+    localStorage.setItem('printstar_customProducts', JSON.stringify(customProducts));
+  }, [customProducts]);
+
+  const products = useMemo(() => {
+    const parsed = parseInputCodes(inputData);
+    return parsed.map(p => {
+      // 1. Exact match
+      if (customProducts[p.code]) {
+        return { ...customProducts[p.code], code: p.code };
+      }
+      
+      // 2. Partial match (Fuzzy search)
+      // Sort saved codes by length descending to match the most specific one first
+      const savedCodes = Object.keys(customProducts).sort((a, b) => b.length - a.length);
+      for (const savedCode of savedCodes) {
+        // Require at least 5 characters for a partial match to avoid false positives
+        if (savedCode.length >= 5) {
+          const pLower = p.code.toLowerCase();
+          const sLower = savedCode.toLowerCase();
+          if (pLower.includes(sLower) || sLower.includes(pLower)) {
+            return { ...customProducts[savedCode], code: p.code };
+          }
+        }
+      }
+
+      return p;
+    });
+  }, [inputData, customProducts]);
 
   const handlePrint = () => {
     window.print();
@@ -39,10 +82,18 @@ const App: React.FC = () => {
     }
   }
 
-  // Effect to warn if mixed types in wrong layout? 
-  // User said: "Select Small will show small form".
-  // So we just filter or render all in the selected size.
-  
+  const handleEditProduct = (product: ProductData) => {
+    setEditingProduct(product);
+  };
+
+  const handleSaveProduct = (updatedProduct: ProductData) => {
+    setCustomProducts(prev => ({
+      ...prev,
+      [updatedProduct.code]: updatedProduct
+    }));
+    setEditingProduct(null);
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Control Panel - Hidden on Print */}
@@ -133,8 +184,10 @@ const App: React.FC = () => {
                 <ul className="list-disc pl-4 mt-1 space-y-1 text-xs">
                     <li>Nhập mã vào ô bên trên.</li>
                     <li>Hệ thống tự động nhận diện loại linh kiện (LT, MO, KB...) để hiển thị thông số.</li>
-                    <li>Chọn "In Thường" cho Sticker lớn (10x9cm).</li>
-                    <li>Chọn "In Nhỏ" cho phụ kiện (6.5x3.5cm).</li>
+                    <li>
+                        <strong>Chỉnh sửa:</strong> Click vào tem bên phải để sửa thông tin (Giá, Tên, Thông số).
+                    </li>
+                    <li>Dữ liệu sẽ được tự động lưu vào trình duyệt.</li>
                 </ul>
             </div>
         </div>
@@ -143,11 +196,24 @@ const App: React.FC = () => {
         <div className="flex-1 bg-gray-300 print:bg-white p-4 print:p-0 overflow-auto flex justify-center min-h-[500px]">
             {/* The Print Sheet */}
             <div className="shadow-2xl print:shadow-none bg-white">
-                <PrintLayout products={products} mode={printMode} campaign={campaign} />
+                <PrintLayout 
+                    products={products} 
+                    mode={printMode} 
+                    campaign={campaign} 
+                    onEdit={handleEditProduct}
+                />
             </div>
         </div>
 
       </div>
+
+      {/* Edit Modal */}
+      <EditProductModal 
+        product={editingProduct}
+        isOpen={!!editingProduct}
+        onClose={() => setEditingProduct(null)}
+        onSave={handleSaveProduct}
+      />
     </div>
   );
 };

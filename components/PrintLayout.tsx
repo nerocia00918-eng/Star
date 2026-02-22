@@ -7,9 +7,10 @@ interface PrintLayoutProps {
   products: ProductData[];
   mode: PrintMode;
   campaign: CampaignMode;
+  onEdit?: (product: ProductData) => void;
 }
 
-export const PrintLayout: React.FC<PrintLayoutProps> = ({ products, mode, campaign }) => {
+export const PrintLayout: React.FC<PrintLayoutProps> = ({ products, mode, campaign, onEdit }) => {
   // Grid Configuration
   // A4 is roughly 210mm x 297mm.
   // Normal (6/page): Cell ~ 100mm x 90mm
@@ -35,18 +36,26 @@ export const PrintLayout: React.FC<PrintLayoutProps> = ({ products, mode, campai
         {products.map((product, idx) => (
           <div 
             key={`${product.code}-${idx}`}
-            className="flex items-center justify-center overflow-hidden break-inside-avoid"
+            className="flex items-center justify-center overflow-hidden break-inside-avoid relative group"
             style={{
                 width: isNormal ? '100mm' : '48mm', // Slightly smaller than calc to avoid overflow
                 height: isNormal ? '90mm' : '35mm',
                 pageBreakInside: 'avoid'
             }}
+            onClick={() => onEdit && onEdit(product)}
           >
             {isNormal ? (
                 <StickerNormal product={product} campaign={campaign} />
             ) : (
                 <StickerSmall product={product} campaign={campaign} />
             )}
+            
+            {/* Edit Overlay Hint */}
+            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all cursor-pointer print:hidden flex items-center justify-center pointer-events-none">
+                <span className="opacity-0 group-hover:opacity-100 bg-white px-2 py-1 rounded shadow text-xs font-bold text-gray-700">
+                    Click để sửa
+                </span>
+            </div>
           </div>
         ))}
       </div>

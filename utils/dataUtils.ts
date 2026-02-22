@@ -3,14 +3,24 @@ import { ProductData, CategoryConfig } from '../types';
 
 // Mock function to simulate a database lookup based on patterns
 export const generateProductFromCode = (code: string): ProductData => {
-  const normalizedCode = code.trim();
+  // Normalize: 
+  // 1. Remove ALL whitespace (spaces, tabs, etc) - This fixes "V . RX" or copy-paste gaps
+  // 2. Remove invisible characters (zero-width spaces, etc.)
+  // 3. Normalize various dot characters to standard dot '.'
+  const normalizedCode = code
+    .replace(/\s+/g, '') 
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/[。．․]/g, '.');
+    
   const lowerCode = normalizedCode.toLowerCase();
   
   // Determine Category Prefix
   let prefix = 'default';
   
   // Check exact prefixes first
-  const knownPrefixes = Object.keys(CATEGORY_MAPPINGS);
+  // SORT BY LENGTH DESCENDING to ensure 'lt.' matches before 'l.'
+  const knownPrefixes = Object.keys(CATEGORY_MAPPINGS).sort((a, b) => b.length - a.length);
+  
   for (const p of knownPrefixes) {
     if (lowerCode.startsWith(p)) {
       prefix = p;
@@ -38,14 +48,21 @@ export const generateProductFromCode = (code: string): ProductData => {
   const shortName = lowerCode.replace(/\./g, '-').replace(/\s+/g, '-');
   const link = `https://tinhocngoisao.com/products/${shortName}`;
 
-  // Generate Random Price for demo
-  const randomPrice = Math.floor(Math.random() * 50) * 100000 + 500000;
+  // Default to 0/Empty as requested by user, so they can fill it in.
+  const price = 0;
   
+  // Generate Empty Specs (labels only)
+  const specs = categoryConfig.fields.map(field => ({
+    label: field.label,
+    icon: field.icon,
+    value: '' // Leave empty for user to fill
+  }));
+
   return {
     code: normalizedCode,
-    name: `${categoryConfig.name} - ${normalizedCode.toUpperCase()} (Mẫu Demo)`,
-    price: randomPrice,
-    salePrice: randomPrice * 0.9, // 10% off for FL/GV demo
+    name: `${categoryConfig.name} - ${normalizedCode.toUpperCase()}`,
+    price: price,
+    salePrice: 0, 
     link: link,
     specs: specs,
     category: prefix
@@ -62,6 +79,7 @@ export const parseInputCodes = (input: string): ProductData[] => {
 };
 
 export const formatPrice = (price: number): string => {
+  if (!price || price === 0) return '';
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price).replace('₫', '');
 };
 

@@ -16,6 +16,10 @@ export const StickerSmall: React.FC<StickerSmallProps> = ({ product, campaign })
 
   const headerColor = isFlashSale ? 'bg-red-600' : 'bg-orange-500';
 
+  // Try to find warranty spec
+  const warrantySpec = product.specs.find(s => s.label.toLowerCase().includes('bảo hành') || s.label.toLowerCase() === 'bh');
+  const warrantyValue = warrantySpec ? warrantySpec.value : '';
+
   return (
     <div className="w-full h-full bg-white border border-gray-200 flex flex-row overflow-hidden text-xs">
         {/* Left: QR and Price */}
@@ -38,7 +42,7 @@ export const StickerSmall: React.FC<StickerSmallProps> = ({ product, campaign })
                 </div>
                  <div className="flex justify-between">
                     <span>BH:</span>
-                    <span className="font-bold">12T</span>
+                    <span className="font-bold">{warrantyValue}</span>
                 </div>
             </div>
         </div>
