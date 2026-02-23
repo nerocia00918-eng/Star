@@ -1936,12 +1936,62 @@
                 try {
                     const json = JSON.parse(e.target.result);
                     if (Array.isArray(json)) {
-                        database = [...json, ...database];
-                        // Removed auto-tick logic as requested
-                        // json.forEach(p => selectedIds.add(p.id)); 
-                        saveSystemState(); 
-                        renderTable();
-                        showToast(`Đã nhập ${json.length} sản phẩm từ file`);
+                        // Find duplicates
+                        const newCodes = json.map(p => p.code.toLowerCase());
+                        const duplicates = database.filter(p => newCodes.includes(p.code.toLowerCase()));
+                        
+                        if (duplicates.length > 0) {
+                            // Store pending import data globally to use in modal actions
+                            window.pendingImportData = json;
+                            
+                            const dupListHTML = duplicates.map(d => `
+                                <div class="flex justify-between items-center bg-white p-2 border rounded mb-1 text-sm">
+                                    <span class="font-bold text-red-600">${d.code}</span>
+                                    <span class="text-gray-500 truncate max-w-[200px]">${d.name}</span>
+                                    <button onclick="deleteProduct('${d.id}'); this.parentElement.remove();" class="text-red-500 hover:bg-red-50 p-1 rounded" title="Xóa mã cũ này">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            `).join('');
+
+                            const modalHTML = `
+                                <div class="p-4 border-b">
+                                    <h2 class="text-xl font-bold text-red-600 flex items-center gap-2">
+                                        <i data-lucide="alert-triangle"></i> Phát hiện trùng lặp
+                                    </h2>
+                                </div>
+                                <div class="p-4">
+                                    <p class="mb-4 text-sm text-gray-700">Có <b>${duplicates.length}</b> mã sản phẩm trong file đã tồn tại trong hệ thống. Bạn muốn xử lý thế nào?</p>
+                                    
+                                    <div class="max-h-48 overflow-y-auto bg-gray-50 p-2 rounded border mb-4">
+                                        ${dupListHTML}
+                                    </div>
+
+                                    <div class="flex flex-col gap-2">
+                                        <button onclick="handleImportDuplicates('replace')" class="w-full bg-red-600 text-white py-2 rounded font-bold hover:bg-red-700">
+                                            Xóa tất cả mã cũ (Ghi đè bằng file mới)
+                                        </button>
+                                        <button onclick="handleImportDuplicates('keep')" class="w-full bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700">
+                                            Giữ lại mã cũ (Bỏ qua mã trùng trong file mới)
+                                        </button>
+                                        <button onclick="handleImportDuplicates('both')" class="w-full bg-gray-600 text-white py-2 rounded font-bold hover:bg-gray-700">
+                                            Giữ cả hai (Sẽ có 2 mã giống nhau)
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="p-4 border-t bg-gray-50 text-right">
+                                    <button onclick="closeModal(); window.pendingImportData = null;" class="px-4 py-2 bg-gray-300 rounded font-bold hover:bg-gray-400">Hủy nhập file</button>
+                                </div>
+                            `;
+                            showModal(modalHTML);
+                            lucide.createIcons();
+                        } else {
+                            // No duplicates, just import
+                            database = [...json, ...database];
+                            saveSystemState(); 
+                            renderTable();
+                            showToast(`Đã nhập ${json.length} sản phẩm từ file`);
+                        }
                     }
                 } catch (err) {
                     showToast('Lỗi đọc file JSON', 'error');
@@ -1949,6 +1999,34 @@
             };
             reader.readAsText(file);
             input.value = '';
+        }
+
+        window.handleImportDuplicates = function(action) {
+            if (!window.pendingImportData) return;
+            const json = window.pendingImportData;
+            const newCodes = json.map(p => p.code.toLowerCase());
+
+            if (action === 'replace') {
+                // Remove old duplicates
+                database = database.filter(p => !newCodes.includes(p.code.toLowerCase()));
+                database = [...json, ...database];
+                showToast(`Đã ghi đè và nhập ${json.length} sản phẩm`);
+            } else if (action === 'keep') {
+                // Filter out duplicates from incoming json
+                const existingCodes = database.map(p => p.code.toLowerCase());
+                const filteredJson = json.filter(p => !existingCodes.includes(p.code.toLowerCase()));
+                database = [...filteredJson, ...database];
+                showToast(`Đã nhập ${filteredJson.length} sản phẩm mới (bỏ qua trùng)`);
+            } else if (action === 'both') {
+                // Just append all
+                database = [...json, ...database];
+                showToast(`Đã nhập ${json.length} sản phẩm (giữ cả trùng lặp)`);
+            }
+
+            saveSystemState();
+            renderTable();
+            closeModal();
+            window.pendingImportData = null;
         }
 
         // --- 8. PDF EXPORT (OPTIMIZED - SANDBOX METHOD) ---
