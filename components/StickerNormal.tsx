@@ -41,10 +41,11 @@ export const StickerNormal: React.FC<StickerNormalProps> = ({ product, campaign 
 
       {/* Body Table */}
       <div className="flex-1 flex flex-col justify-start w-full">
-        {product.specs.slice(0, 6).map((spec, index) => (
+        {product.specs.slice(0, 7).map((spec, index, arr) => (
           <div 
             key={index} 
-            className={`flex items-center border-b border-gray-300 h-[16.6%] ${index % 2 === 0 ? 'bg-orange-50' : 'bg-white'}`}
+            className={`flex items-center border-b border-gray-300 ${index % 2 === 0 ? 'bg-orange-50' : 'bg-white'}`}
+            style={{ height: `${100 / arr.length}%` }}
           >
             {/* Label Column */}
             <div className="w-[35%] flex items-center pl-1 border-r border-gray-300 h-full font-medium text-gray-700">

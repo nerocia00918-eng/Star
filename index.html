@@ -603,6 +603,7 @@
                 {label:'Chuẩn/Hiệu suất',icon:'award',default:'80 Plus Bronze'},
                 {label:'Số rail',icon:'activity',default:'Single Rail'},
                 {label:'Đầu nối Main',icon:'cable',default:'1x 24pin'},
+                {label:'Đầu nối CPU',icon:'cpu',default:'1x 8pin'},
                 {label:'Đầu nối VGA',icon:'cable',default:'2x 8pin'},
                 {label:'Đầu nối Molex/Sata',icon:'hard-drive',default:'4x SATA'}
             ]},
@@ -791,7 +792,7 @@
 
         // --- 3. UTILS ---
         const uuid = () => Math.random().toString(36).substr(2, 9);
-        const formatPrice = (p) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p).replace('₫', 'đ');
+        const formatPrice = (p) => p ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p).replace('₫', 'đ') : '';
         const cleanPrice = (str) => parseInt(str.toString().replace(/[^0-9]/g, ''), 10) || 0;
 
         function showToast(msg, type = 'success') {
@@ -844,10 +845,14 @@
             code = code?.trim() || '';
             if(!code) return null;
 
+            // Remove all whitespace and normalize dots
+            code = code.replace(/\s+/g, '').replace(/[。．․]/g, '.');
             const lowerCode = code.toLowerCase();
             let prefix = 'default';
             
-            for (const p of Object.keys(CATEGORY_MAPPINGS)) {
+            // Sort keys by length descending to match more specific prefixes first
+            const sortedKeys = Object.keys(CATEGORY_MAPPINGS).sort((a, b) => b.length - a.length);
+            for (const p of sortedKeys) {
                 if (lowerCode.startsWith(p)) { prefix = p; break; }
             }
             if (prefix === 'default') {
@@ -857,17 +862,17 @@
             }
 
             const config = CATEGORY_MAPPINGS[prefix] || CATEGORY_MAPPINGS['default'];
-            const finalPrice = price ? cleanPrice(price) : (Math.floor(Math.random() * 50) * 100000 + 500000);
+            const finalPrice = price ? cleanPrice(price) : 0;
             
             return {
                 id: uuid(),
                 code: code,
-                name: name?.trim() || `${config.name} - ${code.toUpperCase()}`,
+                name: name?.trim() || '',
                 price: finalPrice,
-                salePrice: finalPrice * 0.9,
-                link: link?.trim() || `https://tinhocngoisao.com/search?q=${code}`,
-                specs: config.fields.map(f => ({ ...f, value: f.default })),
-                warranty: '12 Tháng',
+                salePrice: finalPrice ? finalPrice * 0.9 : 0,
+                link: link?.trim() || '',
+                specs: config.fields.map(f => ({ ...f, value: '', placeholder: f.default })),
+                warranty: '',
                 campaignName: ''
             };
         }
@@ -904,9 +909,9 @@
                 const name = p.name.toLowerCase();
                 
                 if (searchMode === 'starts_with') {
-                    return code.startsWith(searchTerm) || name.startsWith(searchTerm);
+                    return code.startsWith(searchTerm) || name.startsWith(searchTerm) || (searchTerm.length > 0 && searchTerm.startsWith(code) && code.length >= 5);
                 }
-                return code.includes(searchTerm) || name.includes(searchTerm);
+                return code.includes(searchTerm) || name.includes(searchTerm) || (searchTerm.length > 0 && searchTerm.includes(code) && code.length >= 5);
             });
 
             // --- SORTING LOGIC ---
@@ -1165,10 +1170,9 @@
             const headerColor = isFlash ? 'bg-red-700' : (isGV ? 'bg-orange-500' : 'bg-red-600');
             
             const maxSpecs = 7;
-            const rowHeightClass = 'h-[14.2%]';
-
-            let specsHTML = product.specs.slice(0, maxSpecs).map((s, i) => `
-                <div class="flex items-center border-b border-gray-200 ${rowHeightClass} ${i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}">
+            const specsToRender = product.specs.slice(0, maxSpecs);
+            let specsHTML = specsToRender.map((s, i) => `
+                <div class="flex items-center border-b border-gray-200 ${i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}" style="height: ${100 / specsToRender.length}%">
                     <div class="w-[35%] pl-2 border-r border-gray-200 font-medium text-gray-600 flex items-center">
                         <i data-lucide="${s.icon}" class="w-3 h-3 mr-1 text-blue-600"></i>
                         <span class="truncate text-[10px] uppercase font-bold">${s.label}</span>
@@ -1327,7 +1331,7 @@
                 <div class="flex gap-2 items-center mb-2 spec-row">
                     <input type="hidden" class="spec-icon" value="${s.icon}">
                     <input class="w-1/3 border p-1 rounded text-sm bg-gray-50 spec-label" value="${s.label}" placeholder="Tên thông số">
-                    <input class="flex-1 border p-1 rounded text-sm font-bold spec-value" value="${s.value}" placeholder="Giá trị">
+                    <input class="flex-1 border p-1 rounded text-sm font-bold spec-value" value="${s.value}" placeholder="${s.placeholder || s.default || 'Giá trị'}">
                     <button onclick="this.parentElement.remove()" class="text-red-500 p-1 hover:bg-red-100 rounded" title="Xóa dòng này"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                 </div>
             `).join('');
@@ -1339,17 +1343,17 @@
                 </div>
                 <div class="p-6 overflow-y-auto max-h-[70vh] space-y-3">
                     <div class="grid grid-cols-2 gap-3">
-                        <div><label class="text-xs font-bold text-gray-500">Mã SP</label><input id="edit-code" class="w-full border p-2 rounded" value="${p.code}"></div>
-                        <div><label class="text-xs font-bold text-gray-500">Bảo Hành</label><input id="edit-warranty" class="w-full border p-2 rounded" value="${p.warranty}"></div>
+                        <div><label class="text-xs font-bold text-gray-500">Mã SP</label><input id="edit-code" class="w-full border p-2 rounded" value="${p.code}" placeholder="Nhập mã sản phẩm"></div>
+                        <div><label class="text-xs font-bold text-gray-500">Bảo Hành</label><input id="edit-warranty" class="w-full border p-2 rounded" value="${p.warranty}" placeholder="VD: 12 Tháng"></div>
                     </div>
-                    <div><label class="text-xs font-bold text-gray-500">Tên SP</label><textarea id="edit-name" class="w-full border p-2 rounded h-16">${p.name}</textarea></div>
+                    <div><label class="text-xs font-bold text-gray-500">Tên SP</label><textarea id="edit-name" class="w-full border p-2 rounded h-16" placeholder="Nhập tên sản phẩm">${p.name}</textarea></div>
                     <div class="grid grid-cols-2 gap-3">
-                        <div><label class="text-xs font-bold text-gray-500">Giá Niêm Yết</label><input id="edit-price" class="w-full border p-2 rounded" value="${p.price}"></div>
-                        <div><label class="text-xs font-bold text-gray-500">Giá Sale</label><input id="edit-sale" class="w-full border p-2 rounded" value="${p.salePrice || ''}"></div>
+                        <div><label class="text-xs font-bold text-gray-500">Giá Niêm Yết</label><input id="edit-price" class="w-full border p-2 rounded" value="${p.price || ''}" placeholder="VD: 1000000"></div>
+                        <div><label class="text-xs font-bold text-gray-500">Giá Sale</label><input id="edit-sale" class="w-full border p-2 rounded" value="${p.salePrice || ''}" placeholder="VD: 900000"></div>
                     </div>
                     
                     <!-- NEW LINK FIELD -->
-                    <div><label class="text-xs font-bold text-gray-500">Link Sản Phẩm (QR)</label><input id="edit-link" class="w-full border p-2 rounded" value="${p.link}"></div>
+                    <div><label class="text-xs font-bold text-gray-500">Link Sản Phẩm (QR)</label><input id="edit-link" class="w-full border p-2 rounded" value="${p.link}" placeholder="https://..."></div>
 
                     <div><label class="text-xs font-bold text-gray-500">Khuyến Mãi Text</label><input id="edit-campaign" class="w-full border p-2 rounded" value="${p.campaignName || ''}" placeholder="VD: SALE 9/9"></div>
                     <div class="border-t pt-3">
@@ -2293,12 +2297,9 @@
                 }, 1000);
             }
 
-            // Fallback: If no data loaded, show samples
+            // Fallback: If no data loaded, do not show samples
             if(database.length === 0) {
-                ["LT.AC.NL16-71G-71UJ", "V.GIGA.3060"].forEach(c => {
-                    const p = generateProduct({code: c});
-                    if(p) database.push(p);
-                });
+                // Removed demo products
             }
             renderTable();
         });

@@ -79,11 +79,12 @@ export const CATEGORY_MAPPINGS: Record<string, CategoryConfig> = {
     name: 'Nguồn (PSU)',
     fields: [
       { label: 'Công suất', icon: 'Zap', default: '500W / 650W' },
-      { label: 'Chuẩn', icon: 'Award', default: '80 Plus Bronze/Gold' },
-      { label: 'Quạt', icon: 'Fan', default: '120mm Silent' },
-      { label: 'Cáp', icon: 'Cable', default: 'Liền / Modular' },
-      { label: 'PFC', icon: 'Activity', default: 'Active PFC' },
-      { label: 'Bảo hành', icon: 'ShieldCheck', default: '36 Tháng' },
+      { label: 'Chuẩn/Hiệu suất', icon: 'Award', default: '80 Plus' },
+      { label: 'Số rail', icon: 'GitMerge', default: 'Single Rail' },
+      { label: 'Đầu nối Main', icon: 'CircuitBoard', default: '24-pin' },
+      { label: 'Đầu nối CPU', icon: 'Cpu', default: '8-pin' },
+      { label: 'Đầu nối VGA', icon: 'Monitor', default: '8-pin PCIe' },
+      { label: 'Đầu nối Molex/Sata', icon: 'HardDrive', default: 'SATA/Molex' },
     ]
   },
    // Mainboard
