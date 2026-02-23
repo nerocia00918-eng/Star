@@ -897,7 +897,9 @@
                 link: link?.trim() || '',
                 specs: config.fields.map(f => ({ ...f, value: '', placeholder: f.default })),
                 warranty: '',
-                campaignName: ''
+                campaignName: '',
+                isGiftPromo: false,
+                giftName: ''
             };
         }
 
@@ -1098,9 +1100,11 @@
             if(confirm("Bạn có chắc chắn muốn xóa TẤT CẢ giá khuyến mãi và tên CTKM của toàn bộ sản phẩm trong kho dữ liệu?")) {
                 let count = 0;
                 database.forEach(p => {
-                    if (p.salePrice || p.campaignName) {
+                    if (p.salePrice || p.campaignName || p.isGiftPromo || p.giftName) {
                         p.salePrice = '';
                         p.campaignName = '';
+                        p.isGiftPromo = false;
+                        p.giftName = '';
                         excludedCampaignIds.add(p.id); // Opt out of campaign
                         count++;
                     }
@@ -1275,9 +1279,16 @@
                             <div class="text-[9px] font-bold text-blue-600 text-center uppercase border rounded bg-blue-50 mt-0.5">BH: ${product.warranty}</div>
                         </div>
                         <div class="flex-1 flex flex-col items-center justify-center bg-yellow-50 relative overflow-hidden">
-                            ${campaignBadgeHTML}
-                            <div class="${priceFontSize} font-black text-red-600 leading-none tracking-tighter">${formatPrice(price)}</div>
-                            ${(isFlash || isGV) ? `<div class="text-[10px] text-gray-400 line-through absolute bottom-0 right-1 bg-yellow-50 px-1 rounded">${formatPrice(product.price)}</div>` : ''}
+                            ${product.isGiftPromo && isCampaignActive ? `
+                                <div class="w-full flex flex-col items-center justify-center p-1 h-full">
+                                    <div class="text-2xl font-black text-red-600 leading-none tracking-tighter mb-0.5">${formatPrice(product.price)}</div>
+                                    <div class="text-[9px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded w-[95%] text-center leading-tight line-clamp-2">🎁 ${product.giftName || ''}</div>
+                                </div>
+                            ` : `
+                                ${campaignBadgeHTML}
+                                <div class="${priceFontSize} font-black text-red-600 leading-none tracking-tighter">${formatPrice(price)}</div>
+                                ${(isFlash || isGV) ? `<div class="text-[10px] text-gray-400 line-through absolute bottom-0 right-1 bg-yellow-50 px-1 rounded">${formatPrice(product.price)}</div>` : ''}
+                            `}
                         </div>
                     </div>
                 </div>
@@ -1344,8 +1355,13 @@
                         <div class="flex-1 flex flex-col border-r border-black min-w-0">
                             <!-- Price -->
                             <div class="flex-1 flex flex-col items-center justify-center bg-white p-0.5">
-                                <div class="text-2xl font-black text-red-600 leading-none tracking-tighter truncate w-full text-center">${formatPrice(price)}</div>
-                                ${(isFlash || isGV) ? `<div class="text-[9px] text-gray-400 line-through leading-none mt-0.5">${formatPrice(product.price)}</div>` : ''}
+                                ${product.isGiftPromo && isCampaignActive ? `
+                                    <div class="text-xl font-black text-red-600 leading-none tracking-tighter truncate w-full text-center mb-0.5">${formatPrice(product.price)}</div>
+                                    <div class="text-[8px] font-bold text-white bg-red-500 px-1 py-0.5 rounded w-[95%] text-center leading-tight line-clamp-2">🎁 ${product.giftName || ''}</div>
+                                ` : `
+                                    <div class="text-2xl font-black text-red-600 leading-none tracking-tighter truncate w-full text-center">${formatPrice(price)}</div>
+                                    ${(isFlash || isGV) ? `<div class="text-[9px] text-gray-400 line-through leading-none mt-0.5">${formatPrice(product.price)}</div>` : ''}
+                                `}
                             </div>
                             <!-- Code -->
                             <div class="border-t border-black px-1 py-0.5 bg-gray-50 text-center min-h-[16px] flex items-center justify-center">
@@ -1395,9 +1411,23 @@
                         <div><label class="text-xs font-bold text-gray-500">Bảo Hành</label><input id="edit-warranty" class="w-full border p-2 rounded" value="${p.warranty}" placeholder="VD: 12 Tháng"></div>
                     </div>
                     <div><label class="text-xs font-bold text-gray-500">Tên SP</label><textarea id="edit-name" class="w-full border p-2 rounded h-16" placeholder="Nhập tên sản phẩm">${p.name}</textarea></div>
+                    <div class="flex items-center gap-2 mt-2 mb-1">
+                        <input type="checkbox" id="edit-is-gift" class="w-4 h-4 text-blue-600 rounded" ${p.isGiftPromo ? 'checked' : ''} onchange="toggleGiftPromoEdit()">
+                        <label for="edit-is-gift" class="text-sm font-bold text-blue-700">Khuyến mãi quà tặng kèm</label>
+                    </div>
                     <div class="grid grid-cols-2 gap-3">
-                        <div><label class="text-xs font-bold text-gray-500">Giá Niêm Yết</label><input id="edit-price" class="w-full border p-2 rounded" value="${p.price || ''}" placeholder="VD: 1000000"></div>
-                        <div><label class="text-xs font-bold text-gray-500">Giá Sale</label><input id="edit-sale" class="w-full border p-2 rounded" value="${p.salePrice || ''}" placeholder="VD: 900000"></div>
+                        <div>
+                            <label id="label-edit-price" class="text-xs font-bold text-gray-500">${p.isGiftPromo ? 'Giá Bán' : 'Giá Niêm Yết'}</label>
+                            <input id="edit-price" class="w-full border p-2 rounded" value="${p.price || ''}" placeholder="VD: 1000000">
+                        </div>
+                        <div id="container-edit-sale" class="${p.isGiftPromo ? 'hidden' : 'block'}">
+                            <label class="text-xs font-bold text-gray-500">Giá Sale</label>
+                            <input id="edit-sale" class="w-full border p-2 rounded" value="${p.salePrice || ''}" placeholder="VD: 900000">
+                        </div>
+                        <div id="container-edit-gift" class="${p.isGiftPromo ? 'block' : 'hidden'}">
+                            <label class="text-xs font-bold text-gray-500">Tên Quà Tặng</label>
+                            <input id="edit-gift-name" class="w-full border p-2 rounded" value="${p.giftName || ''}" placeholder="VD: Lót chuột cao cấp">
+                        </div>
                     </div>
                     
                     <!-- NEW LINK FIELD -->
@@ -1732,6 +1762,15 @@
             }
         }
 
+        function toggleGiftPromoEdit() {
+            const isGift = document.getElementById('edit-is-gift').checked;
+            document.getElementById('label-edit-price').textContent = isGift ? 'Giá Bán' : 'Giá Niêm Yết';
+            document.getElementById('container-edit-sale').classList.toggle('hidden', isGift);
+            document.getElementById('container-edit-sale').classList.toggle('block', !isGift);
+            document.getElementById('container-edit-gift').classList.toggle('hidden', !isGift);
+            document.getElementById('container-edit-gift').classList.toggle('block', isGift);
+        }
+
         function saveEdit(id) {
             const p = database.find(x => x.id === id);
             if (!p) return;
@@ -1742,11 +1781,20 @@
             p.price = cleanPrice(document.getElementById('edit-price').value);
             p.salePrice = cleanPrice(document.getElementById('edit-sale').value);
             p.campaignName = document.getElementById('edit-campaign').value;
+            p.isGiftPromo = document.getElementById('edit-is-gift').checked;
+            p.giftName = document.getElementById('edit-gift-name').value;
             
             // YÊU CẦU 1: Xóa giá khuyến mãi -> tự chuyển về in thường và xóa tên CTKM
-            if (!p.salePrice || p.salePrice === 0) {
-                p.campaignName = '';
-                excludedCampaignIds.add(p.id);
+            if (!p.isGiftPromo) {
+                if (!p.salePrice || p.salePrice === 0) {
+                    p.campaignName = '';
+                    excludedCampaignIds.add(p.id);
+                }
+            } else {
+                if (!p.giftName || p.giftName.trim() === '') {
+                    p.campaignName = '';
+                    excludedCampaignIds.add(p.id);
+                }
             }
             
             // SAVE NEW LINK FIELD
@@ -2602,6 +2650,7 @@
         window.copyPrintHistory = copyPrintHistory;
         window.clearPrintHistory = clearPrintHistory;
         window.clearAllCampaignInfo = clearAllCampaignInfo;
+        window.toggleGiftPromoEdit = toggleGiftPromoEdit;
 
     </script>
 <script type="module" src="/index.tsx"></script>
