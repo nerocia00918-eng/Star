@@ -312,6 +312,11 @@
                         <i data-lucide="tag" class="w-4 h-4"></i> Cập nhật Sale
                     </button>
 
+                    <!-- Clear All Campaign Info Button -->
+                    <button onclick="clearAllCampaignInfo()" class="text-red-600 font-bold text-sm hover:bg-red-100 flex items-center gap-1 whitespace-nowrap bg-red-50 px-3 py-2 rounded-lg border border-red-200 shadow-sm transition-all hover:shadow-md" title="Xóa tất cả giá khuyến mãi và tên CTKM trong kho dữ liệu">
+                        <i data-lucide="eraser" class="w-4 h-4"></i> Xóa tất cả CTKM
+                    </button>
+
                     <!-- Search with Mode Selection -->
                     <div class="flex flex-1 gap-2 min-w-[300px]">
                         <select id="search-mode" onchange="renderTable()" class="border border-gray-300 rounded-lg px-2 text-sm bg-white focus:outline-none focus:border-blue-500 cursor-pointer">
@@ -1088,6 +1093,30 @@
             }
         }
 
+        // YÊU CẦU 2: Xóa tất cả thông tin khuyến mãi
+        function clearAllCampaignInfo() {
+            if(confirm("Bạn có chắc chắn muốn xóa TẤT CẢ giá khuyến mãi và tên CTKM của toàn bộ sản phẩm trong kho dữ liệu?")) {
+                let count = 0;
+                database.forEach(p => {
+                    if (p.salePrice || p.campaignName) {
+                        p.salePrice = '';
+                        p.campaignName = '';
+                        excludedCampaignIds.add(p.id); // Opt out of campaign
+                        count++;
+                    }
+                });
+                
+                if (count > 0) {
+                    saveSystemState();
+                    renderTable();
+                    renderPrintArea();
+                    showToast(`Đã xóa thông tin khuyến mãi của ${count} sản phẩm`, "success");
+                } else {
+                    showToast("Không có sản phẩm nào đang có thông tin khuyến mãi", "info");
+                }
+            }
+        }
+
         // --- 5. PRINT LOGIC ---
         function setPrintMode(mode) {
             printMode = mode;
@@ -1713,6 +1742,12 @@
             p.price = cleanPrice(document.getElementById('edit-price').value);
             p.salePrice = cleanPrice(document.getElementById('edit-sale').value);
             p.campaignName = document.getElementById('edit-campaign').value;
+            
+            // YÊU CẦU 1: Xóa giá khuyến mãi -> tự chuyển về in thường và xóa tên CTKM
+            if (!p.salePrice || p.salePrice === 0) {
+                p.campaignName = '';
+                excludedCampaignIds.add(p.id);
+            }
             
             // SAVE NEW LINK FIELD
             p.link = document.getElementById('edit-link').value;
@@ -2566,6 +2601,7 @@
         window.restorePrintHistory = restorePrintHistory;
         window.copyPrintHistory = copyPrintHistory;
         window.clearPrintHistory = clearPrintHistory;
+        window.clearAllCampaignInfo = clearAllCampaignInfo;
 
     </script>
 <script type="module" src="/index.tsx"></script>
