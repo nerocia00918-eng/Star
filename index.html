@@ -759,6 +759,22 @@
             if (savedData) {
                 try {
                     database = JSON.parse(savedData);
+                    
+                    // MIGRATION: Update existing 'p.' (PSU) products to include 'Đầu nối CPU' if missing
+                    database.forEach(p => {
+                        if (p.code.toLowerCase().startsWith('p.')) {
+                            const hasCPU = p.specs.some(s => s.label === 'Đầu nối CPU');
+                            if (!hasCPU) {
+                                const mainIndex = p.specs.findIndex(s => s.label === 'Đầu nối Main');
+                                const cpuSpec = {label:'Đầu nối CPU',icon:'cpu',default:'1x 8pin', value: '', placeholder: '1x 8pin'};
+                                if (mainIndex !== -1) {
+                                    p.specs.splice(mainIndex + 1, 0, cpuSpec);
+                                } else {
+                                    p.specs.push(cpuSpec);
+                                }
+                            }
+                        }
+                    });
                 } catch(e) { console.error('Error loading DB', e); }
             }
 
