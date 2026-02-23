@@ -494,11 +494,14 @@
 
                         <!-- Action Buttons -->
                         <div class="pt-2 flex flex-col gap-2">
-                            <button onclick="window.print()" class="w-full bg-slate-800 text-white font-bold py-3 rounded-lg shadow hover:bg-slate-700 flex justify-center items-center gap-2 transition-colors">
+                            <button onclick="handlePrint()" class="w-full bg-slate-800 text-white font-bold py-3 rounded-lg shadow hover:bg-slate-700 flex justify-center items-center gap-2 transition-colors">
                                 <i data-lucide="printer"></i> IN NGAY
                             </button>
                             <button onclick="exportToPDF()" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow hover:bg-green-500 flex justify-center items-center gap-2 transition-colors">
                                 <i data-lucide="file-down"></i> TẢI FILE PDF
+                            </button>
+                            <button onclick="openPrintHistoryModal()" class="w-full bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold py-2 rounded-lg shadow-sm hover:bg-indigo-200 flex justify-center items-center gap-2 transition-colors">
+                                <i data-lucide="history"></i> LỊCH SỬ IN
                             </button>
                         </div>
                     </div>
@@ -2029,8 +2032,133 @@
             window.pendingImportData = null;
         }
 
-        // --- 8. PDF EXPORT (OPTIMIZED - SANDBOX METHOD) ---
+        // --- 8. PRINT HISTORY ---
+        const STORAGE_KEY_HISTORY = 'printstar_history_v1';
+
+        function recordPrintHistory() {
+            const items = database.filter(p => selectedIds.has(p.id));
+            if (items.length === 0) return;
+
+            const historyEntry = {
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                items: items.map(p => ({ code: p.code, name: p.name }))
+            };
+
+            let history = [];
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
+                if (saved) history = JSON.parse(saved);
+            } catch(e) {}
+
+            history.unshift(historyEntry);
+            if (history.length > 50) history = history.slice(0, 50); // Keep last 50
+
+            localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(history));
+        }
+
+        function handlePrint() {
+            recordPrintHistory();
+            window.print();
+        }
+
+        function openPrintHistoryModal() {
+            let history = [];
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
+                if (saved) history = JSON.parse(saved);
+            } catch(e) {}
+
+            if (history.length === 0) {
+                showToast('Chưa có lịch sử in', 'info');
+                return;
+            }
+
+            const historyListHTML = history.map(h => {
+                const date = new Date(h.timestamp).toLocaleString('vi-VN');
+                const codes = h.items.map(i => i.code).join(', ');
+                return `
+                    <div class="border rounded p-3 mb-2 bg-white shadow-sm">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-bold text-sm text-gray-700">${date} <span class="text-xs font-normal text-gray-500">(${h.items.length} SP)</span></span>
+                            <div class="flex gap-2">
+                                <button onclick="restorePrintHistory('${h.id}')" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 font-bold transition-colors">Chọn lại</button>
+                                <button onclick="copyPrintHistory('${h.id}')" class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200 font-bold flex items-center gap-1 transition-colors"><i data-lucide="copy" class="w-3 h-3"></i> Copy mã</button>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-500 truncate" title="${codes}">${codes}</div>
+                    </div>
+                `;
+            }).join('');
+
+            const html = `
+                <div class="flex justify-between items-center p-4 border-b">
+                    <h2 class="text-xl font-bold flex items-center gap-2"><i data-lucide="history" class="text-indigo-600"></i> Lịch sử in</h2>
+                    <button onclick="closeModal()"><i data-lucide="x"></i></button>
+                </div>
+                <div class="p-4 max-h-[60vh] overflow-y-auto bg-gray-50">
+                    ${historyListHTML}
+                </div>
+                <div class="p-4 border-t bg-white flex justify-between items-center">
+                    <button onclick="clearPrintHistory()" class="px-4 py-2 bg-red-100 text-red-600 rounded font-bold hover:bg-red-200 transition-colors text-sm">Xóa lịch sử</button>
+                    <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded font-bold hover:bg-gray-400 transition-colors text-sm">Đóng</button>
+                </div>
+            `;
+            showModal(html);
+        }
+
+        function restorePrintHistory(id) {
+            let history = [];
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
+                if (saved) history = JSON.parse(saved);
+            } catch(e) {}
+
+            const entry = history.find(h => h.id === id);
+            if (!entry) return;
+
+            selectedIds.clear();
+            const codes = entry.items.map(i => i.code.toLowerCase());
+            database.forEach(p => {
+                if (codes.includes(p.code.toLowerCase())) {
+                    selectedIds.add(p.id);
+                }
+            });
+
+            saveSystemState();
+            renderTable();
+            renderPrintArea();
+            closeModal();
+            showToast(`Đã chọn lại ${selectedIds.size} sản phẩm`);
+        }
+
+        function copyPrintHistory(id) {
+            let history = [];
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
+                if (saved) history = JSON.parse(saved);
+            } catch(e) {}
+
+            const entry = history.find(h => h.id === id);
+            if (!entry) return;
+
+            const codes = entry.items.map(i => i.code).join('\\n');
+            navigator.clipboard.writeText(codes).then(() => {
+                showToast('Đã copy danh sách mã sản phẩm');
+            });
+        }
+
+        function clearPrintHistory() {
+            if(confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử in?')) {
+                localStorage.removeItem(STORAGE_KEY_HISTORY);
+                closeModal();
+                showToast('Đã xóa lịch sử in');
+            }
+        }
+
+        // --- 9. PDF EXPORT (OPTIMIZED - SANDBOX METHOD) ---
         async function exportToPDF() {
+            recordPrintHistory();
             const pages = Array.from(document.querySelectorAll('.print-page'));
             if (pages.length === 0) {
                 showToast('Không có nội dung để xuất PDF', 'error');
@@ -2433,6 +2561,11 @@
         // EXPORT THE NEW BULK UPDATE FUNCTION
         window.bulkUpdateCampaignName = window.bulkUpdateCampaignName;
         window.sortData = sortData; // Export Sort
+        window.handlePrint = handlePrint;
+        window.openPrintHistoryModal = openPrintHistoryModal;
+        window.restorePrintHistory = restorePrintHistory;
+        window.copyPrintHistory = copyPrintHistory;
+        window.clearPrintHistory = clearPrintHistory;
 
     </script>
 <script type="module" src="/index.tsx"></script>
