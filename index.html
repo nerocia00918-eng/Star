@@ -23,6 +23,15 @@
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
+        /* Đảm bảo mã sản phẩm dài không bị nhảy dòng hoặc mất chữ */
+        .code-cell {
+            font-family: monospace;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 250px; /* Tùy chỉnh độ rộng */
+        }
+
         /* Print Specifics - CRITICAL FIX FOR BLANK PAGES */
         @media print {
             @page { 
@@ -286,8 +295,8 @@
             </div>
 
             <!-- Toolbar -->
-            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-                <div class="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+            <div class="flex flex-col gap-4">
+                <div class="flex flex-wrap items-center gap-3 w-full">
                     <button onclick="toggleBulkImport()" class="text-indigo-600 font-bold text-sm hover:underline flex items-center gap-1 whitespace-nowrap bg-indigo-50 px-3 py-2 rounded-lg border border-indigo-100">
                         <i data-lucide="layout-grid" class="w-4 h-4"></i> <span id="bulk-btn-text">Nhập hàng loạt (4 Cột)</span>
                     </button>
@@ -316,30 +325,36 @@
                     <button onclick="clearAllCampaignInfo()" class="text-red-600 font-bold text-sm hover:bg-red-100 flex items-center gap-1 whitespace-nowrap bg-red-50 px-3 py-2 rounded-lg border border-red-200 shadow-sm transition-all hover:shadow-md" title="Xóa tất cả giá khuyến mãi và tên CTKM trong kho dữ liệu">
                         <i data-lucide="eraser" class="w-4 h-4"></i> Xóa tất cả CTKM
                     </button>
+                    
+                    <div class="flex-1"></div>
 
+                    <div class="flex gap-2">
+                        <button onclick="clearAllData()" class="flex items-center gap-1 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-red-50">
+                            <i data-lucide="trash"></i> Xóa Hết
+                        </button>
+                        <button onclick="exportJSON()" class="flex items-center gap-1 bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-50">
+                            <i data-lucide="download" class="w-4 h-4"></i> Xuất JSON
+                        </button>
+                        <label class="flex items-center gap-1 bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-50 cursor-pointer">
+                            <i data-lucide="upload" class="w-4 h-4"></i> Nhập JSON
+                            <input type="file" id="file-import" accept=".json" class="hidden" onchange="importJSON(this)">
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="flex flex-col w-full gap-1">
                     <!-- Search with Mode Selection -->
-                    <div class="flex flex-1 gap-2 min-w-[300px]">
-                        <select id="search-mode" onchange="renderTable()" class="border border-gray-300 rounded-lg px-2 text-sm bg-white focus:outline-none focus:border-blue-500 cursor-pointer">
+                    <div class="flex flex-1 gap-2">
+                        <select id="search-mode" onchange="renderTable()" class="border border-gray-300 rounded-lg px-2 text-sm bg-white focus:outline-none focus:border-blue-500 cursor-pointer w-40">
+                            <option value="starts_with" selected>Bắt đầu bằng</option>
                             <option value="contains">Có chứa</option>
-                            <option value="starts_with">Bắt đầu bằng</option>
                         </select>
                         <div class="relative flex-1">
                             <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"></i>
-                            <input type="text" id="search-input" oninput="renderTable()" placeholder="Tìm kiếm..." class="pl-9 pr-4 py-2 border border-gray-300 rounded-lg w-full text-sm focus:outline-none focus:border-blue-500">
+                            <input type="text" id="search-input" oninput="renderTable()" placeholder="Tìm kiếm..." class="pl-9 pr-2 py-2 border border-gray-300 rounded-lg w-full text-sm focus:outline-none focus:border-blue-500">
                         </div>
                     </div>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="clearAllData()" class="flex items-center gap-1 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-red-50">
-                        <i data-lucide="trash"></i> Xóa Hết
-                    </button>
-                    <button onclick="exportJSON()" class="flex items-center gap-1 bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-50">
-                        <i data-lucide="download" class="w-4 h-4"></i> Xuất JSON
-                    </button>
-                    <label class="flex items-center gap-1 bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-50 cursor-pointer">
-                        <i data-lucide="upload" class="w-4 h-4"></i> Nhập JSON
-                        <input type="file" id="file-import" accept=".json" class="hidden" onchange="importJSON(this)">
-                    </label>
+                    <div id="search-feedback" class="text-xs text-orange-600 font-medium hidden ml-40 pl-2"></div>
                 </div>
             </div>
 
@@ -925,20 +940,53 @@
         function renderTable() {
             const tbody = document.getElementById('table-body');
             const searchInput = document.getElementById('search-input');
-            const searchTerm = searchInput.value.toLowerCase();
+            const searchTerm = String(searchInput.value).trim().toLowerCase();
             const searchMode = document.getElementById('search-mode').value; // 'contains' or 'starts_with'
             
             tbody.innerHTML = '';
 
-            let filtered = database.filter(p => {
-                const code = p.code.toLowerCase();
-                const name = p.name.toLowerCase();
+            const searchFeedback = document.getElementById('search-feedback');
+            searchFeedback.classList.add('hidden');
+            searchFeedback.textContent = '';
+
+            let filtered = database.filter(item => {
+                // Chuẩn hóa mã trong kho dữ liệu trước khi so sánh
+                const itemCode = String(item.code).trim().toLowerCase();
+                const itemName = String(item.name).trim().toLowerCase();
+                
+                if (!searchTerm) return true;
                 
                 if (searchMode === 'starts_with') {
-                    return code.startsWith(searchTerm) || name.startsWith(searchTerm) || (searchTerm.length > 0 && searchTerm.startsWith(code) && code.length >= 5);
+                    return itemCode.startsWith(searchTerm) || itemName.startsWith(searchTerm);
+                } else {
+                    return itemCode.includes(searchTerm) || itemName.includes(searchTerm);
                 }
-                return code.includes(searchTerm) || name.includes(searchTerm) || (searchTerm.length > 0 && searchTerm.includes(code) && code.length >= 5);
             });
+
+            // Fallback Logic: If starts_with yields no results, fallback to contains
+            if (filtered.length === 0 && searchMode === 'starts_with' && searchTerm !== '') {
+                filtered = database.filter(item => {
+                    const itemCode = String(item.code).trim().toLowerCase();
+                    const itemName = String(item.name).trim().toLowerCase();
+                    return itemCode.includes(searchTerm) || itemName.includes(searchTerm);
+                });
+                
+                if (filtered.length > 0) {
+                    searchFeedback.textContent = `Không tìm thấy mã bắt đầu bằng "${searchTerm}", đang hiển thị kết quả có chứa chuỗi này.`;
+                    searchFeedback.classList.remove('hidden');
+                }
+            }
+
+            // Debug Logic
+            if (filtered.length === 0 && searchTerm !== '') {
+                console.log(`[DEBUG] Không tìm thấy kết quả cho: "${searchTerm}" (length: ${searchTerm.length})`);
+                if (database.length > 0) {
+                    // Log a few samples to help debug
+                    const sample = database[0];
+                    const sampleCode = String(sample.code).trim().toLowerCase();
+                    console.log(`[DEBUG] Mẫu trong kho: "${sampleCode}" (length: ${sampleCode.length})`);
+                }
+            }
 
             // --- SORTING LOGIC ---
             if (sortConfig.key !== 'id') {
@@ -989,7 +1037,7 @@
                 tr.className = `hover:bg-blue-50 group transition-colors ${selectedIds.has(p.id) ? 'bg-blue-50' : ''}`;
                 tr.innerHTML = `
                     <td class="p-4 text-center"><input type="checkbox" onchange="toggleSelect('${p.id}')" ${selectedIds.has(p.id) ? 'checked' : ''} class="w-4 h-4 cursor-pointer"></td>
-                    <td class="p-4 font-mono font-bold text-blue-700">${p.code}</td>
+                    <td class="p-4 font-mono font-bold text-blue-700 code-cell" title="${p.code}">${p.code}</td>
                     <td class="p-4 font-medium text-gray-700">${p.name}</td>
                     <td class="p-4 font-bold text-gray-900">${formatPrice(p.price)}</td>
                     <td class="p-4 text-gray-500 max-w-[150px] truncate text-xs"><a href="${p.link}" target="_blank" class="hover:text-blue-600 truncate block">${p.link}</a></td>
@@ -1059,17 +1107,30 @@
         function toggleSelectAll() {
             const checkAll = document.getElementById('check-all');
             const searchInput = document.getElementById('search-input');
-            const searchTerm = searchInput.value.toLowerCase();
+            const searchTerm = String(searchInput.value).trim().toLowerCase();
             const searchMode = document.getElementById('search-mode').value;
             
-            const filtered = database.filter(p => {
-                const code = p.code.toLowerCase();
-                const name = p.name.toLowerCase();
+            let filtered = database.filter(item => {
+                const itemCode = String(item.code).trim().toLowerCase();
+                const itemName = String(item.name).trim().toLowerCase();
+                
+                if (!searchTerm) return true;
+
                 if (searchMode === 'starts_with') {
-                    return code.startsWith(searchTerm) || name.startsWith(searchTerm);
+                    return itemCode.startsWith(searchTerm) || itemName.startsWith(searchTerm);
+                } else {
+                    return itemCode.includes(searchTerm) || itemName.includes(searchTerm);
                 }
-                return code.includes(searchTerm) || name.includes(searchTerm);
             });
+
+            // Fallback Logic: If starts_with yields no results, fallback to contains
+            if (filtered.length === 0 && searchMode === 'starts_with' && searchTerm !== '') {
+                filtered = database.filter(item => {
+                    const itemCode = String(item.code).trim().toLowerCase();
+                    const itemName = String(item.name).trim().toLowerCase();
+                    return itemCode.includes(searchTerm) || itemName.includes(searchTerm);
+                });
+            }
             
             if (checkAll.checked) {
                 filtered.forEach(p => selectedIds.add(p.id));
@@ -1518,7 +1579,8 @@
             let notFoundCodes = [];
 
             codes.forEach(code => {
-                const product = database.find(p => p.code.toLowerCase() === code);
+                // CÁCH MỚI (CHÍNH XÁC 100%): So sánh tuyệt đối
+                const product = database.find(p => String(p.code).trim().toLowerCase() === code);
                 if (product) {
                     selectedIds.add(product.id);
                     foundCount++;
@@ -1630,13 +1692,14 @@
             let notFoundCount = 0;
 
             for (let i = 0; i < codes.length; i++) {
-                const code = codes[i].trim();
+                const code = codes[i].trim().toLowerCase();
                 if (!code) continue;
 
                 const nameRaw = (names.length > 0) ? (names[i] || '').trim() : '';
                 const priceRaw = (prices.length > 0) ? (prices[i] || '').trim() : '';
                 
-                const product = database.find(p => p.code.toLowerCase() === code.toLowerCase());
+                // CÁCH MỚI (CHÍNH XÁC 100%): So sánh tuyệt đối
+                const product = database.find(p => String(p.code).trim().toLowerCase() === code);
                 
                 if (product) {
                     let changed = false;
@@ -1729,13 +1792,13 @@
             let notFoundCount = 0;
 
             for (let i = 0; i < codes.length; i++) {
-                const code = codes[i].trim();
+                const code = codes[i].trim().toLowerCase();
                 const priceRaw = prices[i].trim();
                 
                 if (!code) continue;
 
-                // Find product
-                const product = database.find(p => p.code.toLowerCase() === code.toLowerCase());
+                // CÁCH MỚI (CHÍNH XÁC 100%): So sánh tuyệt đối
+                const product = database.find(p => String(p.code).trim().toLowerCase() === code);
                 
                 if (product) {
                     const newSalePrice = cleanPrice(priceRaw);
@@ -1857,7 +1920,8 @@
             if (!code) return;
 
             // NEW: DUPLICATE CHECK
-            if (database.some(p => p.code.toLowerCase() === code.toLowerCase())) {
+            // CÁCH MỚI (CHÍNH XÁC 100%): So sánh tuyệt đối
+            if (database.some(p => String(p.code).trim().toLowerCase() === code.toLowerCase())) {
                 showToast(`Mã sản phẩm "${code}" đã tồn tại trong hệ thống!`, 'error');
                 // Optional: Highlight the input
                 codeInput.classList.add('border-red-500', 'focus:ring-red-500');
@@ -1938,7 +2002,9 @@
         }
 
         function processBulkImport() {
-            const codes = parseExcelColumn(document.getElementById('bulk-codes').value);
+            const codes = document.getElementById('bulk-codes').value.split('\n')
+                .map(line => line.trim().replace(/\s+/g, '').toUpperCase()) // Xóa sạch khoảng trắng và ép in hoa
+                .filter(line => line.length > 0);
             const names = parseExcelColumn(document.getElementById('bulk-names').value);
             const prices = parseExcelColumn(document.getElementById('bulk-prices').value);
             const links = parseExcelColumn(document.getElementById('bulk-links').value);
@@ -1959,7 +2025,8 @@
                 // but usually we might want to skip or update. For now, we append.
                 // If you want strict unique codes, uncomment below:
                 /*
-                if (database.some(p => p.code.toLowerCase() === code.toLowerCase())) {
+                // CÁCH MỚI (CHÍNH XÁC 100%): So sánh tuyệt đối
+                if (database.some(p => String(p.code).trim().toLowerCase() === code.toLowerCase())) {
                     continue; 
                 }
                 */
@@ -2022,9 +2089,9 @@
                 try {
                     const json = JSON.parse(e.target.result);
                     if (Array.isArray(json)) {
-                        // Find duplicates
-                        const newCodes = json.map(p => p.code.toLowerCase());
-                        const duplicates = database.filter(p => newCodes.includes(p.code.toLowerCase()));
+                        // Find duplicates using exact match
+                        const newCodes = json.map(p => String(p.code).trim().toLowerCase());
+                        const duplicates = database.filter(p => newCodes.includes(String(p.code).trim().toLowerCase()));
                         
                         if (duplicates.length > 0) {
                             // Store pending import data globally to use in modal actions
@@ -2090,17 +2157,17 @@
         window.handleImportDuplicates = function(action) {
             if (!window.pendingImportData) return;
             const json = window.pendingImportData;
-            const newCodes = json.map(p => p.code.toLowerCase());
+            const newCodes = json.map(p => String(p.code).trim().toLowerCase());
 
             if (action === 'replace') {
                 // Remove old duplicates
-                database = database.filter(p => !newCodes.includes(p.code.toLowerCase()));
+                database = database.filter(p => !newCodes.includes(String(p.code).trim().toLowerCase()));
                 database = [...json, ...database];
                 showToast(`Đã ghi đè và nhập ${json.length} sản phẩm`);
             } else if (action === 'keep') {
                 // Filter out duplicates from incoming json
-                const existingCodes = database.map(p => p.code.toLowerCase());
-                const filteredJson = json.filter(p => !existingCodes.includes(p.code.toLowerCase()));
+                const existingCodes = database.map(p => String(p.code).trim().toLowerCase());
+                const filteredJson = json.filter(p => !existingCodes.includes(String(p.code).trim().toLowerCase()));
                 database = [...filteredJson, ...database];
                 showToast(`Đã nhập ${filteredJson.length} sản phẩm mới (bỏ qua trùng)`);
             } else if (action === 'both') {
