@@ -36,8 +36,6 @@ async function proxyToGas(req: any, res: any, action: string, payload: any = nul
   const gasUrl = req.headers['x-gas-url'];
   
   if (!gasUrl || typeof gasUrl !== 'string' || !gasUrl.startsWith('https://script.google.com/')) {
-    // Return empty array for GET requests if no URL is configured, to not break the app
-    if (req.method === 'GET') return res.json([]);
     return res.status(400).json({ error: "Missing or invalid Google Apps Script URL in settings." });
   }
 

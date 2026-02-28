@@ -505,7 +505,7 @@
                             <label class="text-xs font-bold text-gray-500 uppercase mb-2 block">Cấu hình Đồng bộ (Google Sheets)</label>
                             <div class="mb-3">
                                 <div class="relative flex-1">
-                                    <input type="text" id="inp-gas-url" placeholder="Dán link Web App Google Apps Script..." onchange="updatePrintSettings()" class="w-full border border-gray-300 p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none pr-8">
+                                    <input type="text" id="inp-gas-url" placeholder="Dán link Web App Google Apps Script..." onchange="handleGasUrlChange()" class="w-full border border-gray-300 p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none pr-8">
                                     <i data-lucide="link" class="absolute right-2 top-2.5 w-4 h-4 text-gray-400"></i>
                                 </div>
                                 <p class="text-[10px] text-gray-400 mt-1 italic">*Dùng để lưu dữ liệu lên Google Sheets.</p>
@@ -784,7 +784,7 @@
         let sortConfig = { key: 'id', direction: 'asc' }; // default no sort (id is random but stable order)
 
         // --- 2. STORAGE UTILS ---
-        function saveSystemState(emit = true) {
+        function saveSystemState(emit = true, syncData = true) {
             // Save Data
             localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(database));
             
@@ -807,7 +807,9 @@
             }
 
             // Sync to Cloud in background
-            syncToCloud();
+            if (syncData) {
+                syncToCloud();
+            }
         }
 
         let syncTimeout = null;
@@ -858,6 +860,38 @@
             } catch (error) {
                 console.error('Lỗi đồng bộ:', error);
                 return false;
+            }
+        }
+
+        async function handleGasUrlChange() {
+            updatePrintSettings(); // Save settings
+            const gasUrl = document.getElementById('inp-gas-url').value.trim();
+            if (gasUrl) {
+                showToast('Đang tải dữ liệu từ Cloud...', 'info');
+                try {
+                    const response = await fetch('/api/products', { headers: getGasHeaders() });
+                    if (response.ok) {
+                        const cloudData = await response.json();
+                        if (cloudData && cloudData.length > 0) {
+                            database = cloudData.map(p => ({
+                                ...p,
+                                specs: typeof p.specs === 'string' ? JSON.parse(p.specs || '[]') : (p.specs || []),
+                                isGiftPromo: p.isGiftPromo === 'true' || p.isGiftPromo === true
+                            }));
+                            localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(database));
+                            showToast('Đã tải dữ liệu từ Google Sheets', 'success');
+                            renderTable();
+                            renderPrintArea();
+                        } else {
+                            showToast('Google Sheets hiện đang trống.', 'info');
+                        }
+                    } else {
+                        showToast('Lỗi kết nối Google Sheets', 'error');
+                    }
+                } catch (error) {
+                    console.error('Lỗi tải từ Cloud:', error);
+                    showToast('Lỗi tải dữ liệu từ Cloud', 'error');
+                }
             }
         }
 
@@ -1201,14 +1235,14 @@
         function toggleSelect(id) {
             if (selectedIds.has(id)) selectedIds.delete(id);
             else selectedIds.add(id);
-            saveSystemState(); // SAVE ON SELECTION CHANGE
+            saveSystemState(true, false); // SAVE ON SELECTION CHANGE
             renderTable();
         }
 
         // NEW: Deselect All Function
         function deselectAll() {
             selectedIds.clear();
-            saveSystemState();
+            saveSystemState(true, false);
             renderTable();
             updateCountBadge();
             showToast('Đã bỏ chọn tất cả');
@@ -1217,7 +1251,7 @@
         function removeIdFromSelection(id) {
             if (selectedIds.has(id)) {
                 selectedIds.delete(id);
-                saveSystemState();
+                saveSystemState(true, false);
                 renderPrintArea(); // Re-render immediately
                 showToast('Đã xóa khỏi danh sách in', 'success');
                 updateCountBadge();
@@ -1231,7 +1265,7 @@
             } else {
                 excludedCampaignIds.add(id);
             }
-            saveSystemState();
+            saveSystemState(true, false);
             renderPrintArea();
         }
 
@@ -1266,7 +1300,7 @@
             } else {
                 filtered.forEach(p => selectedIds.delete(p.id));
             }
-            saveSystemState(); // SAVE ON BULK SELECTION
+            saveSystemState(true, false); // SAVE ON BULK SELECTION
             renderTable();
         }
 
@@ -1316,7 +1350,7 @@
             printMode = mode;
             document.getElementById('btn-mode-normal').className = `p-2 rounded border text-sm font-bold transition-all ${mode === 'NORMAL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
             document.getElementById('btn-mode-small').className = `p-2 rounded border text-sm font-bold transition-all ${mode === 'SMALL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
-            saveSystemState(); // SAVE SETTING
+            saveSystemState(true, false); // SAVE SETTING ONLY
             renderPrintArea();
         }
 
@@ -1324,7 +1358,7 @@
             campaign = document.getElementById('sel-campaign').value;
             promoColor = document.getElementById('color-promo').value;
             bgNameColor = document.getElementById('color-bg-name').value;
-            saveSystemState(); // SAVE SETTING
+            saveSystemState(true, false); // SAVE SETTING ONLY
             renderPrintArea();
         }
 
@@ -1718,7 +1752,7 @@
                 }
             });
 
-            saveSystemState();
+            saveSystemState(true, false);
             renderTable();
             closeModal();
 
@@ -2463,7 +2497,7 @@
                 }
             });
 
-            saveSystemState();
+            saveSystemState(true, false);
             renderTable();
             renderPrintArea();
             closeModal();
@@ -2880,6 +2914,7 @@
         window.clearAllData = clearAllData;
         window.syncToCloudNow = syncToCloudNow;
         window.setPrintMode = setPrintMode;
+        window.handleGasUrlChange = handleGasUrlChange;
         window.updatePrintSettings = updatePrintSettings;
         window.exportToPDF = exportToPDF;
         window.openEditModal = openEditModal;
