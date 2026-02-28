@@ -11,6 +11,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
@@ -329,6 +330,9 @@
                     <div class="flex-1"></div>
 
                     <div class="flex gap-2">
+                        <button onclick="syncToCloudNow()" class="flex items-center gap-1 bg-white border border-blue-200 text-blue-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-blue-50">
+                            <i data-lucide="cloud-upload" class="w-4 h-4"></i> Đồng bộ Cloud
+                        </button>
                         <button onclick="clearAllData()" class="flex items-center gap-1 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-red-50">
                             <i data-lucide="trash"></i> Xóa Hết
                         </button>
@@ -346,12 +350,12 @@
                     <!-- Search with Mode Selection -->
                     <div class="flex flex-1 gap-2">
                         <select id="search-mode" onchange="renderTable()" class="border border-gray-300 rounded-lg px-2 text-sm bg-white focus:outline-none focus:border-blue-500 cursor-pointer w-40">
-                            <option value="starts_with" selected>Bắt đầu bằng</option>
-                            <option value="contains">Có chứa</option>
+                            <option value="starts_with">Bắt đầu bằng</option>
+                            <option value="contains" selected>Có chứa</option>
                         </select>
                         <div class="relative flex-1">
                             <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"></i>
-                            <input type="text" id="search-input" oninput="renderTable()" placeholder="Tìm kiếm..." class="pl-9 pr-2 py-2 border border-gray-300 rounded-lg w-full text-sm focus:outline-none focus:border-blue-500">
+                            <input type="text" id="search-input" oninput="debouncedRenderTable()" placeholder="Tìm kiếm..." class="pl-9 pr-2 py-2 border border-gray-300 rounded-lg w-full text-sm focus:outline-none focus:border-blue-500">
                         </div>
                     </div>
                     <div id="search-feedback" class="text-xs text-orange-600 font-medium hidden ml-40 pl-2"></div>
@@ -498,6 +502,15 @@
 
                          <!-- API KEY CONFIGURATION (NEW) -->
                         <div class="border-t pt-3">
+                            <label class="text-xs font-bold text-gray-500 uppercase mb-2 block">Cấu hình Đồng bộ (Google Sheets)</label>
+                            <div class="mb-3">
+                                <div class="relative flex-1">
+                                    <input type="text" id="inp-gas-url" placeholder="Dán link Web App Google Apps Script..." onchange="updatePrintSettings()" class="w-full border border-gray-300 p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none pr-8">
+                                    <i data-lucide="link" class="absolute right-2 top-2.5 w-4 h-4 text-gray-400"></i>
+                                </div>
+                                <p class="text-[10px] text-gray-400 mt-1 italic">*Dùng để lưu dữ liệu lên Google Sheets.</p>
+                            </div>
+
                             <label class="text-xs font-bold text-gray-500 uppercase mb-2 block">Cấu hình AI (Gemini)</label>
                             <div class="flex gap-2">
                                 <div class="relative flex-1">
@@ -555,6 +568,19 @@
         // --- 0. STORAGE KEYS ---
         const STORAGE_KEY_DB = 'printstar_db_v1';
         const STORAGE_KEY_SETTINGS = 'printstar_settings_v1';
+
+        // --- SOCKET.IO ---
+        const socket = io();
+        let isRemoteUpdate = false;
+
+        socket.on('sync_selection', (data) => {
+            isRemoteUpdate = true;
+            selectedIds = new Set(data.selectedIds);
+            saveSystemState(false); // don't emit back
+            renderTable();
+            renderPrintArea();
+            isRemoteUpdate = false;
+        });
 
         // --- 1. CONFIG & DATA ---
         const CATEGORY_MAPPINGS = {
@@ -758,7 +784,7 @@
         let sortConfig = { key: 'id', direction: 'asc' }; // default no sort (id is random but stable order)
 
         // --- 2. STORAGE UTILS ---
-        function saveSystemState() {
+        function saveSystemState(emit = true) {
             // Save Data
             localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(database));
             
@@ -771,37 +797,64 @@
                 promoColor,
                 bgNameColor,
                 // NEW: SAVE API KEY
-                apiKey: document.getElementById('inp-api-key').value
+                apiKey: document.getElementById('inp-api-key').value,
+                gasUrl: document.getElementById('inp-gas-url').value
             };
             localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
-        }
 
-        function loadSystemState() {
-            // Load Data
-            const savedData = localStorage.getItem(STORAGE_KEY_DB);
-            if (savedData) {
-                try {
-                    database = JSON.parse(savedData);
-                    
-                    // MIGRATION: Update existing 'p.' (PSU) products to include 'Đầu nối CPU' if missing
-                    database.forEach(p => {
-                        if (p.code.toLowerCase().startsWith('p.')) {
-                            const hasCPU = p.specs.some(s => s.label === 'Đầu nối CPU');
-                            if (!hasCPU) {
-                                const mainIndex = p.specs.findIndex(s => s.label === 'Đầu nối Main');
-                                const cpuSpec = {label:'Đầu nối CPU',icon:'cpu',default:'1x 8pin', value: '', placeholder: '1x 8pin'};
-                                if (mainIndex !== -1) {
-                                    p.specs.splice(mainIndex + 1, 0, cpuSpec);
-                                } else {
-                                    p.specs.push(cpuSpec);
-                                }
-                            }
-                        }
-                    });
-                } catch(e) { console.error('Error loading DB', e); }
+            if (emit && !isRemoteUpdate) {
+                socket.emit('selection_changed', { selectedIds: Array.from(selectedIds) });
             }
 
-            // Load Settings
+            // Sync to Cloud in background
+            syncToCloud();
+        }
+
+        let syncTimeout = null;
+        function syncToCloud() {
+            clearTimeout(syncTimeout);
+            syncTimeout = setTimeout(async () => {
+                await performSync();
+            }, 1000); // Debounce sync to avoid spamming API
+        }
+
+        async function syncToCloudNow() {
+            clearTimeout(syncTimeout);
+            showToast('Đang đồng bộ...', 'info');
+            const success = await performSync();
+            if (success) {
+                showToast('Đã đồng bộ lên Google Sheets', 'success');
+            } else {
+                showToast('Lỗi đồng bộ dữ liệu', 'error');
+            }
+        }
+
+        function getGasHeaders() {
+            const gasUrl = document.getElementById('inp-gas-url')?.value || '';
+            return {
+                'Content-Type': 'application/json',
+                'x-gas-url': gasUrl
+            };
+        }
+
+        async function performSync() {
+            try {
+                const response = await fetch('/api/products/sync', {
+                    method: 'POST',
+                    headers: getGasHeaders(),
+                    body: JSON.stringify({ products: database })
+                });
+                if (!response.ok) throw new Error('Sync failed');
+                console.log('Đã đồng bộ lên Google Sheets');
+                return true;
+            } catch (error) {
+                console.error('Lỗi đồng bộ:', error);
+                return false;
+            }
+        }
+
+        async function loadSystemState() {
+            // Load Settings First
             const savedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
             if (savedSettings) {
                 try {
@@ -815,6 +868,7 @@
                     
                     // NEW: LOAD API KEY
                     if (settings.apiKey) document.getElementById('inp-api-key').value = settings.apiKey;
+                    if (settings.gasUrl) document.getElementById('inp-gas-url').value = settings.gasUrl;
                     
                     // Apply loaded settings to UI
                     document.getElementById('sel-campaign').value = campaign;
@@ -826,6 +880,58 @@
                     document.getElementById('btn-mode-small').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'SMALL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
                     
                 } catch(e) { console.error('Error loading Settings', e); }
+            }
+
+            // Load Data from Cloud
+            try {
+                const response = await fetch('/api/products', { headers: getGasHeaders() });
+                if (response.ok) {
+                    const cloudData = await response.json();
+                    if (cloudData && cloudData.length > 0) {
+                        database = cloudData.map(p => ({
+                            ...p,
+                            specs: typeof p.specs === 'string' ? JSON.parse(p.specs || '[]') : (p.specs || []),
+                            isGiftPromo: p.isGiftPromo === 'true' || p.isGiftPromo === true
+                        }));
+                        localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(database));
+                        console.log('Đã tải dữ liệu từ Google Sheets');
+                    } else {
+                        loadLocalDatabase();
+                    }
+                } else {
+                    loadLocalDatabase();
+                }
+            } catch (error) {
+                console.error('Lỗi tải từ Cloud, dùng dữ liệu Local:', error);
+                loadLocalDatabase();
+            }
+
+            // MIGRATION logic
+            database.forEach(p => {
+                if (p.code.toLowerCase().startsWith('p.')) {
+                    const hasCPU = p.specs.some(s => s.label === 'Đầu nối CPU');
+                    if (!hasCPU) {
+                        const mainIndex = p.specs.findIndex(s => s.label === 'Đầu nối Main');
+                        const cpuSpec = {label:'Đầu nối CPU',icon:'cpu',default:'1x 8pin', value: '', placeholder: '1x 8pin'};
+                        if (mainIndex !== -1) {
+                            p.specs.splice(mainIndex + 1, 0, cpuSpec);
+                        } else {
+                            p.specs.push(cpuSpec);
+                        }
+                    }
+                }
+            });
+
+            renderTable();
+            renderPrintArea();
+        }
+
+        function loadLocalDatabase() {
+            const savedData = localStorage.getItem(STORAGE_KEY_DB);
+            if (savedData) {
+                try {
+                    database = JSON.parse(savedData);
+                } catch(e) { console.error('Error loading DB', e); }
             }
         }
 
@@ -937,10 +1043,18 @@
         }
 
         // UPDATED RENDER TABLE WITH SORTING
+        let searchTimeout = null;
+        function debouncedRenderTable() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                renderTable();
+            }, 300);
+        }
+
         function renderTable() {
             const tbody = document.getElementById('table-body');
             const searchInput = document.getElementById('search-input');
-            const searchTerm = String(searchInput.value).trim().toLowerCase();
+            const searchTerm = String(searchInput.value).replace(/\s+/g, '').toLowerCase();
             const searchMode = document.getElementById('search-mode').value; // 'contains' or 'starts_with'
             
             tbody.innerHTML = '';
@@ -951,24 +1065,22 @@
 
             let filtered = database.filter(item => {
                 // Chuẩn hóa mã trong kho dữ liệu trước khi so sánh
-                const itemCode = String(item.code).trim().toLowerCase();
-                const itemName = String(item.name).trim().toLowerCase();
+                const itemCode = String(item.code).replace(/\s+/g, '').toLowerCase();
                 
                 if (!searchTerm) return true;
                 
                 if (searchMode === 'starts_with') {
-                    return itemCode.startsWith(searchTerm) || itemName.startsWith(searchTerm);
+                    return itemCode.startsWith(searchTerm) || (searchTerm.startsWith(itemCode) && itemCode.length >= 5);
                 } else {
-                    return itemCode.includes(searchTerm) || itemName.includes(searchTerm);
+                    return itemCode.includes(searchTerm) || (searchTerm.includes(itemCode) && itemCode.length >= 5);
                 }
             });
 
             // Fallback Logic: If starts_with yields no results, fallback to contains
             if (filtered.length === 0 && searchMode === 'starts_with' && searchTerm !== '') {
                 filtered = database.filter(item => {
-                    const itemCode = String(item.code).trim().toLowerCase();
-                    const itemName = String(item.name).trim().toLowerCase();
-                    return itemCode.includes(searchTerm) || itemName.includes(searchTerm);
+                    const itemCode = String(item.code).replace(/\s+/g, '').toLowerCase();
+                    return itemCode.includes(searchTerm) || (searchTerm.includes(itemCode) && itemCode.length >= 5);
                 });
                 
                 if (filtered.length > 0) {
@@ -983,7 +1095,7 @@
                 if (database.length > 0) {
                     // Log a few samples to help debug
                     const sample = database[0];
-                    const sampleCode = String(sample.code).trim().toLowerCase();
+                    const sampleCode = String(sample.code).replace(/\s+/g, '').toLowerCase();
                     console.log(`[DEBUG] Mẫu trong kho: "${sampleCode}" (length: ${sampleCode.length})`);
                 }
             }
@@ -1032,7 +1144,11 @@
                 return;
             }
 
-            filtered.forEach(p => {
+            // Limit to 100 results to prevent DOM lag
+            const displayLimit = 100;
+            const displayedItems = filtered.slice(0, displayLimit);
+
+            displayedItems.forEach(p => {
                 const tr = document.createElement('tr');
                 tr.className = `hover:bg-blue-50 group transition-colors ${selectedIds.has(p.id) ? 'bg-blue-50' : ''}`;
                 tr.innerHTML = `
@@ -1050,6 +1166,13 @@
                 `;
                 tbody.appendChild(tr);
             });
+
+            if (filtered.length > displayLimit) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="6" class="p-4 text-center text-gray-500 text-sm italic">Hiển thị ${displayLimit}/${filtered.length} kết quả. Hãy tìm kiếm chi tiết hơn để xem các sản phẩm khác.</td>`;
+                tbody.appendChild(tr);
+            }
+
             lucide.createIcons();
             updateCountBadge();
         }
@@ -1107,28 +1230,26 @@
         function toggleSelectAll() {
             const checkAll = document.getElementById('check-all');
             const searchInput = document.getElementById('search-input');
-            const searchTerm = String(searchInput.value).trim().toLowerCase();
+            const searchTerm = String(searchInput.value).replace(/\s+/g, '').toLowerCase();
             const searchMode = document.getElementById('search-mode').value;
             
             let filtered = database.filter(item => {
-                const itemCode = String(item.code).trim().toLowerCase();
-                const itemName = String(item.name).trim().toLowerCase();
+                const itemCode = String(item.code).replace(/\s+/g, '').toLowerCase();
                 
                 if (!searchTerm) return true;
 
                 if (searchMode === 'starts_with') {
-                    return itemCode.startsWith(searchTerm) || itemName.startsWith(searchTerm);
+                    return itemCode.startsWith(searchTerm) || (searchTerm.startsWith(itemCode) && itemCode.length >= 5);
                 } else {
-                    return itemCode.includes(searchTerm) || itemName.includes(searchTerm);
+                    return itemCode.includes(searchTerm) || (searchTerm.includes(itemCode) && itemCode.length >= 5);
                 }
             });
 
             // Fallback Logic: If starts_with yields no results, fallback to contains
             if (filtered.length === 0 && searchMode === 'starts_with' && searchTerm !== '') {
                 filtered = database.filter(item => {
-                    const itemCode = String(item.code).trim().toLowerCase();
-                    const itemName = String(item.name).trim().toLowerCase();
-                    return itemCode.includes(searchTerm) || itemName.includes(searchTerm);
+                    const itemCode = String(item.code).replace(/\s+/g, '').toLowerCase();
+                    return itemCode.includes(searchTerm) || (searchTerm.includes(itemCode) && itemCode.length >= 5);
                 });
             }
             
@@ -1689,7 +1810,7 @@
             }
 
             let updatedCount = 0;
-            let notFoundCount = 0;
+            let notFoundCodes = [];
 
             for (let i = 0; i < codes.length; i++) {
                 const code = codes[i].trim().toLowerCase();
@@ -1719,7 +1840,7 @@
 
                     if (changed) updatedCount++;
                 } else {
-                    notFoundCount++;
+                    notFoundCodes.push(codes[i].trim().toUpperCase());
                 }
             }
             
@@ -1731,9 +1852,24 @@
                 showToast(`Đã cập nhật thông tin cho ${updatedCount} sản phẩm!`, 'success');
             }
             
-            if (notFoundCount > 0) {
+            if (notFoundCodes.length > 0) {
                 setTimeout(() => {
-                    showToast(`Có ${notFoundCount} mã không tìm thấy trong hệ thống`, 'error');
+                   const missingHtml = `
+                    <div class="p-6">
+                        <div class="flex items-center gap-3 mb-4 text-red-600 border-b border-red-100 pb-3">
+                            <i data-lucide="alert-circle" class="w-8 h-8"></i>
+                            <h3 class="text-xl font-bold">Cảnh báo: Mã thiếu dữ liệu</h3>
+                        </div>
+                        <p class="mb-3 text-sm text-gray-600">Các mã sản phẩm sau <strong>không có trong Kho dữ liệu</strong>. Vui lòng thêm mới các mã này:</p>
+                        <div class="bg-red-50 border border-red-200 rounded p-4 max-h-60 overflow-y-auto font-mono text-sm font-bold text-red-700 shadow-inner">
+                            ${notFoundCodes.map(c => `<div>• ${c}</div>`).join('')}
+                        </div>
+                        <div class="mt-6 flex justify-end">
+                            <button onclick="closeModal()" class="bg-gray-800 text-white px-6 py-2 rounded font-bold hover:bg-gray-700 transition-colors">Đã hiểu</button>
+                        </div>
+                    </div>
+                   `;
+                   showModal(missingHtml);
                 }, 500);
             }
         }
@@ -1789,7 +1925,7 @@
             }
 
             let updatedCount = 0;
-            let notFoundCount = 0;
+            let notFoundCodes = [];
 
             for (let i = 0; i < codes.length; i++) {
                 const code = codes[i].trim().toLowerCase();
@@ -1806,7 +1942,7 @@
                     product.salePrice = newSalePrice;
                     updatedCount++;
                 } else {
-                    notFoundCount++;
+                    notFoundCodes.push(codes[i].trim().toUpperCase());
                 }
             }
 
@@ -1818,9 +1954,24 @@
                 showToast(`Đã cập nhật giá SALE cho ${updatedCount} sản phẩm!`, 'success');
             }
             
-            if (notFoundCount > 0) {
+            if (notFoundCodes.length > 0) {
                 setTimeout(() => {
-                    showToast(`Có ${notFoundCount} mã không tìm thấy trong hệ thống`, 'error');
+                   const missingHtml = `
+                    <div class="p-6">
+                        <div class="flex items-center gap-3 mb-4 text-red-600 border-b border-red-100 pb-3">
+                            <i data-lucide="alert-circle" class="w-8 h-8"></i>
+                            <h3 class="text-xl font-bold">Cảnh báo: Mã thiếu dữ liệu</h3>
+                        </div>
+                        <p class="mb-3 text-sm text-gray-600">Các mã sản phẩm sau <strong>không có trong Kho dữ liệu</strong>. Vui lòng thêm mới các mã này:</p>
+                        <div class="bg-red-50 border border-red-200 rounded p-4 max-h-60 overflow-y-auto font-mono text-sm font-bold text-red-700 shadow-inner">
+                            ${notFoundCodes.map(c => `<div>• ${c}</div>`).join('')}
+                        </div>
+                        <div class="mt-6 flex justify-end">
+                            <button onclick="closeModal()" class="bg-gray-800 text-white px-6 py-2 rounded font-bold hover:bg-gray-700 transition-colors">Đã hiểu</button>
+                        </div>
+                    </div>
+                   `;
+                   showModal(missingHtml);
                 }, 500);
             }
         }
@@ -2003,8 +2154,8 @@
 
         function processBulkImport() {
             const codes = document.getElementById('bulk-codes').value.split('\n')
-                .map(line => line.trim().replace(/\s+/g, '').toUpperCase()) // Xóa sạch khoảng trắng và ép in hoa
-                .filter(line => line.length > 0);
+                .map(line => line.trim()) // Luôn luôn trim() từng dòng
+                .filter(line => line !== "");
             const names = parseExcelColumn(document.getElementById('bulk-names').value);
             const prices = parseExcelColumn(document.getElementById('bulk-prices').value);
             const links = parseExcelColumn(document.getElementById('bulk-links').value);
@@ -2021,15 +2172,10 @@
                 const code = codes[i]?.trim();
                 if (!code) continue;
 
-                // Bulk import doesn't check duplicates strictly to allow updates, 
-                // but usually we might want to skip or update. For now, we append.
-                // If you want strict unique codes, uncomment below:
-                /*
                 // CÁCH MỚI (CHÍNH XÁC 100%): So sánh tuyệt đối
                 if (database.some(p => String(p.code).trim().toLowerCase() === code.toLowerCase())) {
                     continue; 
                 }
-                */
 
                 const name = names[i] || '';
                 const price = prices[i] || '';
@@ -2185,7 +2331,7 @@
         // --- 8. PRINT HISTORY ---
         const STORAGE_KEY_HISTORY = 'printstar_history_v1';
 
-        function recordPrintHistory() {
+        async function recordPrintHistory() {
             const items = database.filter(p => selectedIds.has(p.id));
             if (items.length === 0) return;
 
@@ -2205,6 +2351,23 @@
             if (history.length > 50) history = history.slice(0, 50); // Keep last 50
 
             localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(history));
+
+            // Sync to API
+            try {
+                await fetch('/api/history', {
+                    method: 'POST',
+                    headers: getGasHeaders(),
+                    body: JSON.stringify({
+                        id: historyEntry.id,
+                        date: historyEntry.timestamp,
+                        items: historyEntry.items,
+                        campaign: campaign,
+                        mode: printMode
+                    })
+                });
+            } catch (error) {
+                console.error('Failed to save history to cloud', error);
+            }
         }
 
         function handlePrint() {
@@ -2212,12 +2375,29 @@
             window.print();
         }
 
-        function openPrintHistoryModal() {
+        async function openPrintHistoryModal() {
             let history = [];
             try {
+                const response = await fetch('/api/history', { headers: getGasHeaders() });
+                if (response.ok) {
+                    const data = await response.json();
+                    history = data.map(h => ({
+                        id: h.id,
+                        timestamp: h.date,
+                        items: h.items
+                    }));
+                    // Sort by newest first
+                    history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    // Update local cache
+                    localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(history));
+                } else {
+                    const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
+                    if (saved) history = JSON.parse(saved);
+                }
+            } catch(e) {
                 const saved = localStorage.getItem(STORAGE_KEY_HISTORY);
                 if (saved) history = JSON.parse(saved);
-            } catch(e) {}
+            }
 
             if (history.length === 0) {
                 showToast('Chưa có lịch sử in', 'info');
@@ -2298,9 +2478,14 @@
             });
         }
 
-        function clearPrintHistory() {
+        async function clearPrintHistory() {
             if(confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử in?')) {
                 localStorage.removeItem(STORAGE_KEY_HISTORY);
+                try {
+                    await fetch('/api/history', { method: 'DELETE', headers: getGasHeaders() });
+                } catch (e) {
+                    console.error('Failed to clear history from API', e);
+                }
                 closeModal();
                 showToast('Đã xóa lịch sử in');
             }
@@ -2658,9 +2843,9 @@
         }
 
         // Init
-        window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', async () => {
             // LOAD FROM STORAGE
-            loadSystemState();
+            await loadSystemState();
 
             // WARN IF FILE PROTOCOL
             if (window.location.protocol === 'file:') {
@@ -2685,6 +2870,7 @@
         window.toggleItemCampaign = toggleItemCampaign;
         window.toggleSelectAll = toggleSelectAll;
         window.clearAllData = clearAllData;
+        window.syncToCloudNow = syncToCloudNow;
         window.setPrintMode = setPrintMode;
         window.updatePrintSettings = updatePrintSettings;
         window.exportToPDF = exportToPDF;
@@ -2718,6 +2904,7 @@
         window.clearPrintHistory = clearPrintHistory;
         window.clearAllCampaignInfo = clearAllCampaignInfo;
         window.toggleGiftPromoEdit = toggleGiftPromoEdit;
+        window.debouncedRenderTable = debouncedRenderTable;
 
     </script>
 <script type="module" src="/index.tsx"></script>
