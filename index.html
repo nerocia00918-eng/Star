@@ -820,6 +820,11 @@
 
         async function syncToCloudNow() {
             clearTimeout(syncTimeout);
+            const gasUrl = document.getElementById('inp-gas-url')?.value || '';
+            if (!gasUrl) {
+                showToast('Vui lòng dán link Google Apps Script vào cột cấu hình bên trái trước!', 'error');
+                return;
+            }
             showToast('Đang đồng bộ...', 'info');
             const success = await performSync();
             if (success) {
@@ -838,6 +843,9 @@
         }
 
         async function performSync() {
+            const gasUrl = document.getElementById('inp-gas-url')?.value || '';
+            if (!gasUrl) return false;
+
             try {
                 const response = await fetch('/api/products/sync', {
                     method: 'POST',
