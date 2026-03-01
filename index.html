@@ -330,10 +330,13 @@
                     <div class="flex-1"></div>
 
                     <div class="flex gap-2">
-                        <button onclick="syncToCloudNow()" class="flex items-center gap-1 bg-white border border-blue-200 text-blue-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-blue-50">
+                        <button onclick="handleGasUrlChange()" class="flex items-center gap-1 bg-white border border-green-200 text-green-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-green-50" title="Phục hồi dữ liệu từ Google Sheets">
+                            <i data-lucide="cloud-download" class="w-4 h-4"></i> Tải từ Cloud
+                        </button>
+                        <button onclick="syncToCloudNow()" class="flex items-center gap-1 bg-white border border-blue-200 text-blue-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-blue-50" title="Đẩy dữ liệu hiện tại lên Google Sheets">
                             <i data-lucide="cloud-upload" class="w-4 h-4"></i> Đồng bộ Cloud
                         </button>
-                        <button onclick="clearAllData()" class="flex items-center gap-1 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-red-50">
+                        <button onclick="clearAllData()" class="flex items-center gap-1 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-red-50" title="Xóa toàn bộ dữ liệu trên máy tính này">
                             <i data-lucide="trash"></i> Xóa Hết
                         </button>
                         <button onclick="exportJSON()" class="flex items-center gap-1 bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-50">
@@ -848,6 +851,12 @@
             const gasUrl = document.getElementById('inp-gas-url')?.value || '';
             if (!gasUrl) return false;
 
+            // SAFEGUARD: Ngăn chặn việc vô tình đồng bộ mảng rỗng làm xóa trắng Google Sheets
+            if (database.length === 0) {
+                console.warn('Bảo vệ dữ liệu: Không đồng bộ mảng rỗng lên Google Sheets.');
+                return false;
+            }
+
             try {
                 const response = await fetch('/api/products/sync', {
                     method: 'POST',
@@ -892,6 +901,8 @@
                     console.error('Lỗi tải từ Cloud:', error);
                     showToast('Lỗi tải dữ liệu từ Cloud', 'error');
                 }
+            } else {
+                showToast('Vui lòng dán link Google Apps Script vào cột cấu hình bên trái trước!', 'error');
             }
         }
 
