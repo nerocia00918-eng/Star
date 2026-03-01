@@ -1086,11 +1086,18 @@
 
         // UPDATED RENDER TABLE WITH SORTING
         let searchTimeout = null;
+        let displayLimit = 100;
         function debouncedRenderTable() {
+            displayLimit = 100;
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
                 renderTable();
             }, 300);
+        }
+
+        function loadMoreResults() {
+            displayLimit += 100;
+            renderTable();
         }
 
         function renderTable() {
@@ -1187,7 +1194,6 @@
             }
 
             // Limit to 100 results to prevent DOM lag
-            const displayLimit = 100;
             const displayedItems = filtered.slice(0, displayLimit);
 
             displayedItems.forEach(p => {
@@ -1211,7 +1217,10 @@
 
             if (filtered.length > displayLimit) {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td colspan="6" class="p-4 text-center text-gray-500 text-sm italic">Hiển thị ${displayLimit}/${filtered.length} kết quả. Hãy tìm kiếm chi tiết hơn để xem các sản phẩm khác.</td>`;
+                tr.innerHTML = `<td colspan="6" class="p-4 text-center text-gray-500 text-sm italic">
+                    Hiển thị ${displayLimit}/${filtered.length} kết quả. 
+                    <button onclick="loadMoreResults()" class="ml-2 text-blue-600 hover:underline font-bold">Xem thêm</button>
+                </td>`;
                 tbody.appendChild(tr);
             }
 
@@ -1229,6 +1238,7 @@
                 sortConfig.key = key;
                 sortConfig.direction = 'asc';
             }
+            displayLimit = 100;
             renderTable();
         }
 
@@ -1314,6 +1324,7 @@
                 selectedIds.clear();
                 excludedCampaignIds.clear();
                 saveSystemState();
+                displayLimit = 100;
                 renderTable();
                 showToast("Đã xóa toàn bộ dữ liệu", "success");
             }
@@ -1500,7 +1511,7 @@
                     <div class="h-[18%] flex bg-white relative">
                         <div class="w-[35%] flex flex-col justify-center px-1 border-r border-gray-200">
                             <div class="text-[10px] font-mono font-bold text-gray-500 text-center break-all leading-tight">${product.code}</div>
-                            <div class="text-[9px] font-bold text-blue-600 text-center uppercase border rounded bg-blue-50 mt-0.5">BH: ${product.warranty}</div>
+                            <div class="text-[9px] font-bold text-blue-600 text-center uppercase border rounded bg-blue-50 mt-0.5">BH: ${product.warranty || ''}</div>
                         </div>
                         <div class="flex-1 flex flex-col items-center justify-center bg-yellow-50 relative overflow-hidden">
                             ${product.isGiftPromo && isCampaignActive ? `
@@ -1601,7 +1612,7 @@
                             </div>
                             <!-- Warranty -->
                             <div class="border-t border-black px-0.5 py-0.5 text-center min-h-[16px] flex items-center justify-center bg-blue-50">
-                                 <span class="text-[8px] font-bold text-blue-600 leading-none whitespace-nowrap scale-95 transform">BH: ${product.warranty.replace(' Tháng','T')}</span>
+                                 <span class="text-[8px] font-bold text-blue-600 leading-none whitespace-nowrap scale-95 transform">BH: ${(product.warranty || '').replace(' Tháng','T')}</span>
                             </div>
                         </div>
                     </div>
@@ -2248,6 +2259,7 @@
 
             toggleBulkImport();
             saveSystemState(); 
+            displayLimit = 100;
             renderTable();
 
             if (addedCount > 0) {
@@ -2947,6 +2959,7 @@
         window.clearPrintHistory = clearPrintHistory;
         window.clearAllCampaignInfo = clearAllCampaignInfo;
         window.toggleGiftPromoEdit = toggleGiftPromoEdit;
+        window.loadMoreResults = loadMoreResults;
         window.debouncedRenderTable = debouncedRenderTable;
 
     </script>
