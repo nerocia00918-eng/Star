@@ -26,6 +26,11 @@ io.on("connection", (socket) => {
     socket.broadcast.emit("sync_selection", data);
   });
 
+  socket.on("database_changed", (data) => {
+    // Broadcast database changes to all OTHER clients
+    socket.broadcast.emit("sync_database", data);
+  });
+
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
   });
