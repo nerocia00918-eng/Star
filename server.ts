@@ -32,37 +32,52 @@ io.on("connection", (socket) => {
 });
 
 // Helper to proxy requests to Google Apps Script
-async function proxyToGas(req: any, res: any, action: string, payload: any = null) {
+async function proxyToGas(req: any, res: any, action: string, payload: any = null, retries = 2) {
   const gasUrl = req.headers['x-gas-url'];
   
   if (!gasUrl || typeof gasUrl !== 'string' || !gasUrl.startsWith('https://script.google.com/')) {
     return res.status(400).json({ error: "Missing or invalid Google Apps Script URL in settings." });
   }
 
-  try {
-    let response;
-    if (req.method === 'GET') {
-      const url = new URL(gasUrl);
-      url.searchParams.append('action', action);
-      response = await fetch(url.toString());
-    } else {
-      // POST
-      response = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, ...payload })
-      });
-    }
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      let response;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
 
-    if (!response.ok) {
-        throw new Error(`GAS responded with status: ${response.status}`);
-    }
+      if (req.method === 'GET') {
+        const url = new URL(gasUrl);
+        url.searchParams.append('action', action);
+        response = await fetch(url.toString(), { signal: controller.signal });
+      } else {
+        // POST
+        response = await fetch(gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, ...payload }),
+          signal: controller.signal
+        });
+      }
 
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    console.error(`Error proxying to GAS (${action}):`, error);
-    res.status(500).json({ error: "Failed to communicate with Google Sheets." });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+          throw new Error(`GAS responded with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return res.json(data);
+    } catch (error: any) {
+      console.error(`Attempt ${attempt} - Error proxying to GAS (${action}):`, error.message || error);
+      if (attempt === retries) {
+        return res.status(500).json({ 
+          error: "Lỗi kết nối đến Google Sheets (Timeout). Vui lòng thử lại sau.",
+          details: error.message 
+        });
+      }
+      // Wait 2 seconds before retrying
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
   }
 }
 
