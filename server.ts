@@ -11,7 +11,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: "*" }
+  cors: { origin: "*" },
+  maxHttpBufferSize: 1e8 // 100 MB for large database sync
 });
 
 app.use(cors());
