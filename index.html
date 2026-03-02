@@ -1136,23 +1136,40 @@
             searchFeedback.textContent = '';
 
             let filtered = database.filter(item => {
-                // Chuẩn hóa mã trong kho dữ liệu trước khi so sánh
-                const itemCode = String(item.code).replace(/\s+/g, '').toLowerCase();
-                
                 if (!searchTerm) return true;
                 
+                const rawCode = String(item.code).trim().toLowerCase();
+                const rawName = String(item.name || '').trim().toLowerCase();
+                const rawSearch = String(searchInput.value).trim().toLowerCase();
+                
+                const itemCode = rawCode.replace(/\s+/g, '');
+                const cleanSearch = rawSearch.replace(/\s+/g, '');
+                
                 if (searchMode === 'starts_with') {
-                    return itemCode.startsWith(searchTerm) || (searchTerm.startsWith(itemCode) && itemCode.length >= 5);
+                    return rawCode.startsWith(rawSearch) || 
+                           itemCode.startsWith(cleanSearch) || 
+                           (cleanSearch.startsWith(itemCode) && itemCode.length >= 5);
                 } else {
-                    return itemCode.includes(searchTerm) || (searchTerm.includes(itemCode) && itemCode.length >= 5);
+                    return rawCode.includes(rawSearch) || 
+                           rawName.includes(rawSearch) || 
+                           itemCode.includes(cleanSearch) || 
+                           (cleanSearch.includes(itemCode) && itemCode.length >= 5);
                 }
             });
 
             // Fallback Logic: If starts_with yields no results, fallback to contains
             if (filtered.length === 0 && searchMode === 'starts_with' && searchTerm !== '') {
                 filtered = database.filter(item => {
-                    const itemCode = String(item.code).replace(/\s+/g, '').toLowerCase();
-                    return itemCode.includes(searchTerm) || (searchTerm.includes(itemCode) && itemCode.length >= 5);
+                    const rawCode = String(item.code).trim().toLowerCase();
+                    const rawName = String(item.name || '').trim().toLowerCase();
+                    const rawSearch = String(searchInput.value).trim().toLowerCase();
+                    const itemCode = rawCode.replace(/\s+/g, '');
+                    const cleanSearch = rawSearch.replace(/\s+/g, '');
+                    
+                    return rawCode.includes(rawSearch) || 
+                           rawName.includes(rawSearch) || 
+                           itemCode.includes(cleanSearch) || 
+                           (cleanSearch.includes(itemCode) && itemCode.length >= 5);
                 });
                 
                 if (filtered.length > 0) {
@@ -1309,22 +1326,40 @@
             const searchMode = document.getElementById('search-mode').value;
             
             let filtered = database.filter(item => {
-                const itemCode = String(item.code).replace(/\s+/g, '').toLowerCase();
-                
                 if (!searchTerm) return true;
-
+                
+                const rawCode = String(item.code).trim().toLowerCase();
+                const rawName = String(item.name || '').trim().toLowerCase();
+                const rawSearch = String(searchInput.value).trim().toLowerCase();
+                
+                const itemCode = rawCode.replace(/\s+/g, '');
+                const cleanSearch = rawSearch.replace(/\s+/g, '');
+                
                 if (searchMode === 'starts_with') {
-                    return itemCode.startsWith(searchTerm) || (searchTerm.startsWith(itemCode) && itemCode.length >= 5);
+                    return rawCode.startsWith(rawSearch) || 
+                           itemCode.startsWith(cleanSearch) || 
+                           (cleanSearch.startsWith(itemCode) && itemCode.length >= 5);
                 } else {
-                    return itemCode.includes(searchTerm) || (searchTerm.includes(itemCode) && itemCode.length >= 5);
+                    return rawCode.includes(rawSearch) || 
+                           rawName.includes(rawSearch) || 
+                           itemCode.includes(cleanSearch) || 
+                           (cleanSearch.includes(itemCode) && itemCode.length >= 5);
                 }
             });
 
             // Fallback Logic: If starts_with yields no results, fallback to contains
             if (filtered.length === 0 && searchMode === 'starts_with' && searchTerm !== '') {
                 filtered = database.filter(item => {
-                    const itemCode = String(item.code).replace(/\s+/g, '').toLowerCase();
-                    return itemCode.includes(searchTerm) || (searchTerm.includes(itemCode) && itemCode.length >= 5);
+                    const rawCode = String(item.code).trim().toLowerCase();
+                    const rawName = String(item.name || '').trim().toLowerCase();
+                    const rawSearch = String(searchInput.value).trim().toLowerCase();
+                    const itemCode = rawCode.replace(/\s+/g, '');
+                    const cleanSearch = rawSearch.replace(/\s+/g, '');
+                    
+                    return rawCode.includes(rawSearch) || 
+                           rawName.includes(rawSearch) || 
+                           itemCode.includes(cleanSearch) || 
+                           (cleanSearch.includes(itemCode) && itemCode.length >= 5);
                 });
             }
             
