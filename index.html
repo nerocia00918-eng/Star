@@ -1123,10 +1123,51 @@
             renderTable();
         }
 
+        function matchSearch(item, searchInputStr, searchMode) {
+            const rawSearch = String(searchInputStr).trim().toLowerCase();
+            if (!rawSearch) return true;
+            
+            const rawCode = String(item.code).trim().toLowerCase();
+            const rawName = String(item.name || '').trim().toLowerCase();
+            
+            const superClean = (str) => String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+            const cleanCode = superClean(item.code);
+            const cleanName = superClean(item.name);
+            const cleanSearch = superClean(rawSearch);
+            
+            if (searchMode === 'starts_with') {
+                return rawCode.startsWith(rawSearch) || 
+                       cleanCode.startsWith(cleanSearch) || 
+                       (cleanSearch.startsWith(cleanCode) && cleanCode.length >= 5);
+            } else {
+                // Exact full match
+                if (rawCode.includes(rawSearch) || 
+                    rawName.includes(rawSearch) || 
+                    cleanCode.includes(cleanSearch) || 
+                    cleanName.includes(cleanSearch) ||
+                    (cleanSearch.includes(cleanCode) && cleanCode.length >= 5)) {
+                    return true;
+                }
+                
+                // Multi-keyword match (AND logic) - allows searching "MO.DU Trắng" or "Màn hình Dell"
+                const searchWords = rawSearch.split(/\s+/).filter(w => w.length > 0);
+                if (searchWords.length > 1) {
+                    return searchWords.every(word => {
+                        const cleanWord = superClean(word);
+                        return rawCode.includes(word) || 
+                               rawName.includes(word) || 
+                               (cleanWord && cleanCode.includes(cleanWord)) || 
+                               (cleanWord && cleanName.includes(cleanWord));
+                    });
+                }
+                return false;
+            }
+        }
+
         function renderTable() {
             const tbody = document.getElementById('table-body');
             const searchInput = document.getElementById('search-input');
-            const searchTerm = String(searchInput.value).replace(/\s+/g, '').toLowerCase();
+            const searchTerm = String(searchInput.value).trim();
             const searchMode = document.getElementById('search-mode').value; // 'contains' or 'starts_with'
             
             tbody.innerHTML = '';
@@ -1135,42 +1176,11 @@
             searchFeedback.classList.add('hidden');
             searchFeedback.textContent = '';
 
-            let filtered = database.filter(item => {
-                if (!searchTerm) return true;
-                
-                const rawCode = String(item.code).trim().toLowerCase();
-                const rawName = String(item.name || '').trim().toLowerCase();
-                const rawSearch = String(searchInput.value).trim().toLowerCase();
-                
-                const itemCode = rawCode.replace(/\s+/g, '');
-                const cleanSearch = rawSearch.replace(/\s+/g, '');
-                
-                if (searchMode === 'starts_with') {
-                    return rawCode.startsWith(rawSearch) || 
-                           itemCode.startsWith(cleanSearch) || 
-                           (cleanSearch.startsWith(itemCode) && itemCode.length >= 5);
-                } else {
-                    return rawCode.includes(rawSearch) || 
-                           rawName.includes(rawSearch) || 
-                           itemCode.includes(cleanSearch) || 
-                           (cleanSearch.includes(itemCode) && itemCode.length >= 5);
-                }
-            });
+            let filtered = database.filter(item => matchSearch(item, searchInput.value, searchMode));
 
             // Fallback Logic: If starts_with yields no results, fallback to contains
             if (filtered.length === 0 && searchMode === 'starts_with' && searchTerm !== '') {
-                filtered = database.filter(item => {
-                    const rawCode = String(item.code).trim().toLowerCase();
-                    const rawName = String(item.name || '').trim().toLowerCase();
-                    const rawSearch = String(searchInput.value).trim().toLowerCase();
-                    const itemCode = rawCode.replace(/\s+/g, '');
-                    const cleanSearch = rawSearch.replace(/\s+/g, '');
-                    
-                    return rawCode.includes(rawSearch) || 
-                           rawName.includes(rawSearch) || 
-                           itemCode.includes(cleanSearch) || 
-                           (cleanSearch.includes(itemCode) && itemCode.length >= 5);
-                });
+                filtered = database.filter(item => matchSearch(item, searchInput.value, 'contains'));
                 
                 if (filtered.length > 0) {
                     searchFeedback.textContent = `Không tìm thấy mã bắt đầu bằng "${searchTerm}", đang hiển thị kết quả có chứa chuỗi này.`;
@@ -1322,45 +1332,14 @@
         function toggleSelectAll() {
             const checkAll = document.getElementById('check-all');
             const searchInput = document.getElementById('search-input');
-            const searchTerm = String(searchInput.value).replace(/\s+/g, '').toLowerCase();
+            const searchTerm = String(searchInput.value).trim();
             const searchMode = document.getElementById('search-mode').value;
             
-            let filtered = database.filter(item => {
-                if (!searchTerm) return true;
-                
-                const rawCode = String(item.code).trim().toLowerCase();
-                const rawName = String(item.name || '').trim().toLowerCase();
-                const rawSearch = String(searchInput.value).trim().toLowerCase();
-                
-                const itemCode = rawCode.replace(/\s+/g, '');
-                const cleanSearch = rawSearch.replace(/\s+/g, '');
-                
-                if (searchMode === 'starts_with') {
-                    return rawCode.startsWith(rawSearch) || 
-                           itemCode.startsWith(cleanSearch) || 
-                           (cleanSearch.startsWith(itemCode) && itemCode.length >= 5);
-                } else {
-                    return rawCode.includes(rawSearch) || 
-                           rawName.includes(rawSearch) || 
-                           itemCode.includes(cleanSearch) || 
-                           (cleanSearch.includes(itemCode) && itemCode.length >= 5);
-                }
-            });
+            let filtered = database.filter(item => matchSearch(item, searchInput.value, searchMode));
 
             // Fallback Logic: If starts_with yields no results, fallback to contains
             if (filtered.length === 0 && searchMode === 'starts_with' && searchTerm !== '') {
-                filtered = database.filter(item => {
-                    const rawCode = String(item.code).trim().toLowerCase();
-                    const rawName = String(item.name || '').trim().toLowerCase();
-                    const rawSearch = String(searchInput.value).trim().toLowerCase();
-                    const itemCode = rawCode.replace(/\s+/g, '');
-                    const cleanSearch = rawSearch.replace(/\s+/g, '');
-                    
-                    return rawCode.includes(rawSearch) || 
-                           rawName.includes(rawSearch) || 
-                           itemCode.includes(cleanSearch) || 
-                           (cleanSearch.includes(itemCode) && itemCode.length >= 5);
-                });
+                filtered = database.filter(item => matchSearch(item, searchInput.value, 'contains'));
             }
             
             if (checkAll.checked) {
