@@ -464,6 +464,27 @@
                             </div>
                         </div>
 
+                        <!-- QR Code Toggle -->
+                        <div class="flex items-center justify-between border-t border-gray-100 pt-3">
+                            <label class="text-xs font-bold text-gray-500 uppercase">Hiển thị mã QR</label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="toggle-qr" class="sr-only peer" checked onchange="updatePrintSettings()">
+                                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <!-- Custom Warranty Toggle (Small Sticker) -->
+                        <div class="border-t border-gray-100 pt-3">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="text-xs font-bold text-gray-500 uppercase">Thay chữ Bảo Hành (Tem Nhỏ)</label>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="toggle-custom-warranty" class="sr-only peer" onchange="toggleCustomWarrantyInput(); updatePrintSettings()">
+                                    <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                            <input type="text" id="inp-custom-warranty" placeholder="VD: HÀNG TẶNG KHÔNG BÁN" class="w-full border border-gray-300 p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none hidden" oninput="updatePrintSettings()">
+                        </div>
+
                         <!-- Campaign Selection -->
                         <div>
                             <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Chế độ Chiến dịch (Toàn cục)</label>
@@ -791,7 +812,21 @@
         let campaign = 'NONE';
         let promoColor = '#FFFF00';
         let bgNameColor = '#DC2626';
+        let showQR = true;
+        let customWarrantySmall = false;
+        let customWarrantyTextSmall = '';
         
+        // Global function for UI toggle
+        window.toggleCustomWarrantyInput = function() {
+            const isChecked = document.getElementById('toggle-custom-warranty').checked;
+            const inp = document.getElementById('inp-custom-warranty');
+            if (isChecked) {
+                inp.classList.remove('hidden');
+            } else {
+                inp.classList.add('hidden');
+            }
+        };
+
         // Sorting State
         let sortConfig = { key: 'id', direction: 'asc' }; // default no sort (id is random but stable order)
 
@@ -808,6 +843,9 @@
                 campaign,
                 promoColor,
                 bgNameColor,
+                showQR,
+                customWarrantySmall,
+                customWarrantyTextSmall,
                 // NEW: SAVE API KEY
                 apiKey: document.getElementById('inp-api-key').value,
                 gasUrl: document.getElementById('inp-gas-url').value
@@ -930,6 +968,9 @@
                     if (settings.campaign) campaign = settings.campaign;
                     if (settings.promoColor) promoColor = settings.promoColor;
                     if (settings.bgNameColor) bgNameColor = settings.bgNameColor;
+                    if (settings.showQR !== undefined) showQR = settings.showQR;
+                    if (settings.customWarrantySmall !== undefined) customWarrantySmall = settings.customWarrantySmall;
+                    if (settings.customWarrantyTextSmall !== undefined) customWarrantyTextSmall = settings.customWarrantyTextSmall;
                     
                     // NEW: LOAD API KEY
                     if (settings.apiKey) document.getElementById('inp-api-key').value = settings.apiKey;
@@ -939,6 +980,10 @@
                     document.getElementById('sel-campaign').value = campaign;
                     document.getElementById('color-promo').value = promoColor;
                     document.getElementById('color-bg-name').value = bgNameColor;
+                    document.getElementById('toggle-qr').checked = showQR;
+                    document.getElementById('toggle-custom-warranty').checked = customWarrantySmall;
+                    document.getElementById('inp-custom-warranty').value = customWarrantyTextSmall;
+                    toggleCustomWarrantyInput();
                     
                     // Visual update for mode buttons:
                     document.getElementById('btn-mode-normal').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'NORMAL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
@@ -1406,6 +1451,9 @@
             campaign = document.getElementById('sel-campaign').value;
             promoColor = document.getElementById('color-promo').value;
             bgNameColor = document.getElementById('color-bg-name').value;
+            showQR = document.getElementById('toggle-qr').checked;
+            customWarrantySmall = document.getElementById('toggle-custom-warranty').checked;
+            customWarrantyTextSmall = document.getElementById('inp-custom-warranty').value;
             saveSystemState(true, false); // SAVE SETTING ONLY
             renderPrintArea();
         }
@@ -1462,19 +1510,21 @@
             }
 
             // Render QR Codes manually after DOM insertion
-            setTimeout(() => {
-                items.forEach((p, idx) => {
-                    // QR codes might appear multiple times if logic changes, but here we render once per ID per render.
-                    // Actually, IDs must be unique in DOM. In pagination, ids are fine.
-                    const el = document.getElementById(`qr-${p.id}-${printMode}`);
-                    if (el) {
-                        el.innerHTML = '';
-                        new QRCode(el, { text: p.link, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.L });
-                        const img = el.querySelector('img');
-                        if (img) img.removeAttribute('title');
-                    }
-                });
-            }, 0);
+            if (showQR) {
+                setTimeout(() => {
+                    items.forEach((p, idx) => {
+                        // QR codes might appear multiple times if logic changes, but here we render once per ID per render.
+                        // Actually, IDs must be unique in DOM. In pagination, ids are fine.
+                        const el = document.getElementById(`qr-${p.id}-${printMode}`);
+                        if (el) {
+                            el.innerHTML = '';
+                            new QRCode(el, { text: p.link, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.L });
+                            const img = el.querySelector('img');
+                            if (img) img.removeAttribute('title');
+                        }
+                    });
+                }, 0);
+            }
             
             lucide.createIcons();
         }
@@ -1539,8 +1589,8 @@
                          <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-lg font-bold flex items-center gap-1"><i data-lucide="edit-2" class="w-3 h-3"></i> Sửa</span>
                     </div>
                     <div class="${headerColor} text-white px-2 py-1 h-[20%] flex items-center transition-colors">
-                        <div id="qr-${product.id}-NORMAL" class="h-full aspect-square bg-white mr-2 flex items-center justify-center p-1 overflow-hidden"></div>
-                        <div class="flex-1 font-bold leading-tight line-clamp-3 text-[13px] uppercase">${product.name}</div>
+                        ${showQR ? `<div id="qr-${product.id}-NORMAL" class="h-full aspect-square bg-white mr-2 flex items-center justify-center p-1 overflow-hidden"></div>` : ''}
+                        <div class="flex-1 font-bold leading-tight line-clamp-3 text-[13px] uppercase ${!showQR ? 'text-center' : ''}">${product.name}</div>
                     </div>
                     <div class="flex-1 flex flex-col w-full bg-white overflow-hidden border-b border-gray-400">
                         ${specsHTML}
@@ -1584,6 +1634,14 @@
                 campaignText = product.campaignName || (isFlash ? 'FLASH SALE' : (isGV ? 'GIÁ SỐC' : ''));
             }
 
+            // Custom Warranty Logic
+            let displayWarranty = '';
+            if (customWarrantySmall) {
+                displayWarranty = customWarrantyTextSmall;
+            } else {
+                displayWarranty = 'BH: ' + (product.warranty || '').replace(' Tháng','T');
+            }
+
             // Campaign Header (Row 1) - Only Show if Active
             const campaignHeader = campaignText 
                 ? `<div class="bg-yellow-400 text-red-700 font-black text-[9px] text-center uppercase tracking-wider py-0.5 border-b border-black leading-none w-full">${campaignText}</div>` 
@@ -1624,7 +1682,7 @@
                     <!-- 3. BODY (Split Left/Right) -->
                     <div class="flex-1 flex flex-row w-full min-h-0">
                         <!-- LEFT: Price (Top) + Code (Bottom) -->
-                        <div class="flex-1 flex flex-col border-r border-black min-w-0">
+                        <div class="flex-1 flex flex-col ${showQR ? 'border-r border-black' : ''} min-w-0">
                             <!-- Price -->
                             <div class="flex-1 flex flex-col items-center justify-center bg-white p-0.5">
                                 ${product.isGiftPromo && isCampaignActive ? `
@@ -1635,13 +1693,21 @@
                                     ${(isFlash || isGV) ? `<div class="text-[9px] text-gray-400 line-through leading-none mt-0.5">${formatPrice(product.price)}</div>` : ''}
                                 `}
                             </div>
-                            <!-- Code -->
-                            <div class="border-t border-black px-1 py-0.5 bg-gray-50 text-center min-h-[16px] flex items-center justify-center">
-                                 <span class="font-mono font-bold text-gray-700 text-[9px] leading-none break-words whitespace-normal w-full line-clamp-2">${product.code}</span>
+                            <!-- Bottom Row: Code + Warranty (if no QR) -->
+                            <div class="border-t border-black flex min-h-[16px]">
+                                <div class="flex-1 px-1 py-0.5 bg-gray-50 text-center flex items-center justify-center ${!showQR ? 'border-r border-black' : ''}">
+                                     <span class="font-mono font-bold text-gray-700 text-[9px] leading-none break-words whitespace-normal w-full line-clamp-2">${product.code}</span>
+                                </div>
+                                ${!showQR ? `
+                                <div class="px-1 py-0.5 text-center flex items-center justify-center bg-blue-50 w-[30%]">
+                                     <span class="text-[8px] font-bold text-blue-600 leading-none whitespace-nowrap scale-95 transform">${displayWarranty}</span>
+                                </div>
+                                ` : ''}
                             </div>
                         </div>
 
                         <!-- RIGHT: QR (Top) + Warranty (Bottom) -->
+                        ${showQR ? `
                         <div class="w-[28%] flex flex-col min-w-[36px]">
                             <!-- QR -->
                             <div class="flex-1 flex items-center justify-center p-0.5 overflow-hidden qr-container">
@@ -1649,9 +1715,10 @@
                             </div>
                             <!-- Warranty -->
                             <div class="border-t border-black px-0.5 py-0.5 text-center min-h-[16px] flex items-center justify-center bg-blue-50">
-                                 <span class="text-[8px] font-bold text-blue-600 leading-none whitespace-nowrap scale-95 transform">BH: ${(product.warranty || '').replace(' Tháng','T')}</span>
+                                 <span class="text-[8px] font-bold text-blue-600 leading-none whitespace-nowrap scale-95 transform">${displayWarranty}</span>
                             </div>
                         </div>
+                        ` : ''}
                     </div>
                 </div>
             </div>`;
