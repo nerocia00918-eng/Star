@@ -154,6 +154,25 @@
             display: block;
         }
 
+        /* Promo Sticker Styles */
+        .promo-sticker {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            box-sizing: border-box;
+            width: 100%;
+            height: 100%;
+        }
+        .pattern-bg {
+            background-image: radial-gradient(#e11d48 0.5px, transparent 0.5px);
+            background-size: 10px 10px;
+            opacity: 0.03;
+        }
+
         /* Styles for the Delete 'X' button */
         .btn-delete-sticker {
             position: absolute;
@@ -458,10 +477,20 @@
                         <!-- Mode Selection -->
                         <div>
                             <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Kiểu tem</label>
-                            <div class="grid grid-cols-2 gap-2">
+                            <div class="grid grid-cols-3 gap-2">
                                 <button onclick="setPrintMode('NORMAL')" id="btn-mode-normal" class="p-2 rounded border text-sm font-bold bg-blue-600 text-white border-blue-600 transition-all">Tem Lớn (6)</button>
                                 <button onclick="setPrintMode('SMALL')" id="btn-mode-small" class="p-2 rounded border text-sm font-bold bg-white text-gray-600 border-gray-200 hover:bg-gray-50 transition-all">Tem Nhỏ (24)</button>
+                                <button onclick="setPrintMode('PROMO')" id="btn-mode-promo" class="p-2 rounded border text-sm font-bold bg-white text-gray-600 border-gray-200 hover:bg-gray-50 transition-all">Tem CTKM (6)</button>
                             </div>
+                        </div>
+
+                        <!-- Custom CTKM Settings (Only visible in PROMO mode) -->
+                        <div id="promo-settings" class="border-t border-gray-100 pt-3 hidden">
+                            <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Tiêu đề Sticker CTKM</label>
+                            <input type="text" id="inp-global-promo-name" value="SIÊU SALE GIÁ SỐC" class="w-full border border-gray-300 p-2 rounded text-sm mb-2 focus:ring-2 focus:ring-blue-500 outline-none" oninput="updatePrintSettings()">
+                            
+                            <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Thời hạn áp dụng</label>
+                            <input type="text" id="inp-global-date" placeholder="VD: 01/03 - 15/03" class="w-full border border-gray-300 p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" oninput="updatePrintSettings()">
                         </div>
 
                         <!-- QR Code Toggle -->
@@ -600,6 +629,42 @@
         socket.on('sync_selection', (data) => {
             isRemoteUpdate = true;
             selectedIds = new Set(data.selectedIds);
+            
+            // Sync settings if provided
+            if (data.settings) {
+                if (data.settings.excludedCampaignIds) excludedCampaignIds = new Set(data.settings.excludedCampaignIds);
+                if (data.settings.printMode) printMode = data.settings.printMode;
+                if (data.settings.campaign) campaign = data.settings.campaign;
+                if (data.settings.promoColor) promoColor = data.settings.promoColor;
+                if (data.settings.bgNameColor) bgNameColor = data.settings.bgNameColor;
+                if (data.settings.showQR !== undefined) showQR = data.settings.showQR;
+                if (data.settings.customWarrantySmall !== undefined) customWarrantySmall = data.settings.customWarrantySmall;
+                if (data.settings.customWarrantyTextSmall !== undefined) customWarrantyTextSmall = data.settings.customWarrantyTextSmall;
+                if (data.settings.globalPromoName !== undefined) globalPromoName = data.settings.globalPromoName;
+                if (data.settings.globalDate !== undefined) globalDate = data.settings.globalDate;
+                
+                // Update UI
+                document.getElementById('sel-campaign').value = campaign;
+                document.getElementById('color-promo').value = promoColor;
+                document.getElementById('color-bg-name').value = bgNameColor;
+                document.getElementById('toggle-qr').checked = showQR;
+                document.getElementById('toggle-custom-warranty').checked = customWarrantySmall;
+                document.getElementById('inp-custom-warranty').value = customWarrantyTextSmall;
+                document.getElementById('inp-global-promo-name').value = globalPromoName;
+                document.getElementById('inp-global-date').value = globalDate;
+                toggleCustomWarrantyInput();
+                
+                document.getElementById('btn-mode-normal').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'NORMAL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+                document.getElementById('btn-mode-small').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'SMALL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+                document.getElementById('btn-mode-promo').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'PROMO' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+                
+                if (printMode === 'PROMO') {
+                    document.getElementById('promo-settings').classList.remove('hidden');
+                } else {
+                    document.getElementById('promo-settings').classList.add('hidden');
+                }
+            }
+
             saveSystemState(false); // don't emit back
             renderTable();
             renderPrintArea();
@@ -815,6 +880,8 @@
         let showQR = true;
         let customWarrantySmall = false;
         let customWarrantyTextSmall = '';
+        let globalPromoName = 'SIÊU SALE GIÁ SỐC';
+        let globalDate = '';
         
         // Global function for UI toggle
         window.toggleCustomWarrantyInput = function() {
@@ -846,6 +913,8 @@
                 showQR,
                 customWarrantySmall,
                 customWarrantyTextSmall,
+                globalPromoName,
+                globalDate,
                 // NEW: SAVE API KEY
                 apiKey: document.getElementById('inp-api-key').value,
                 gasUrl: document.getElementById('inp-gas-url').value
@@ -853,7 +922,21 @@
             localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
 
             if (emit && !isRemoteUpdate) {
-                socket.emit('selection_changed', { selectedIds: Array.from(selectedIds) });
+                socket.emit('selection_changed', { 
+                    selectedIds: Array.from(selectedIds),
+                    settings: {
+                        excludedCampaignIds: Array.from(excludedCampaignIds),
+                        printMode,
+                        campaign,
+                        promoColor,
+                        bgNameColor,
+                        showQR,
+                        customWarrantySmall,
+                        customWarrantyTextSmall,
+                        globalPromoName,
+                        globalDate
+                    }
+                });
             }
             if (syncData && !isRemoteUpdate) {
                 socket.emit('database_changed', { database: database });
@@ -971,6 +1054,8 @@
                     if (settings.showQR !== undefined) showQR = settings.showQR;
                     if (settings.customWarrantySmall !== undefined) customWarrantySmall = settings.customWarrantySmall;
                     if (settings.customWarrantyTextSmall !== undefined) customWarrantyTextSmall = settings.customWarrantyTextSmall;
+                    if (settings.globalPromoName !== undefined) globalPromoName = settings.globalPromoName;
+                    if (settings.globalDate !== undefined) globalDate = settings.globalDate;
                     
                     // NEW: LOAD API KEY
                     if (settings.apiKey) document.getElementById('inp-api-key').value = settings.apiKey;
@@ -983,11 +1068,20 @@
                     document.getElementById('toggle-qr').checked = showQR;
                     document.getElementById('toggle-custom-warranty').checked = customWarrantySmall;
                     document.getElementById('inp-custom-warranty').value = customWarrantyTextSmall;
+                    document.getElementById('inp-global-promo-name').value = globalPromoName;
+                    document.getElementById('inp-global-date').value = globalDate;
                     toggleCustomWarrantyInput();
                     
                     // Visual update for mode buttons:
                     document.getElementById('btn-mode-normal').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'NORMAL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
                     document.getElementById('btn-mode-small').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'SMALL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+                    document.getElementById('btn-mode-promo').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'PROMO' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+                    
+                    if (printMode === 'PROMO') {
+                        document.getElementById('promo-settings').classList.remove('hidden');
+                    } else {
+                        document.getElementById('promo-settings').classList.add('hidden');
+                    }
                     
                 } catch(e) { console.error('Error loading Settings', e); }
             }
@@ -1443,6 +1537,14 @@
             printMode = mode;
             document.getElementById('btn-mode-normal').className = `p-2 rounded border text-sm font-bold transition-all ${mode === 'NORMAL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
             document.getElementById('btn-mode-small').className = `p-2 rounded border text-sm font-bold transition-all ${mode === 'SMALL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+            document.getElementById('btn-mode-promo').className = `p-2 rounded border text-sm font-bold transition-all ${mode === 'PROMO' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+            
+            if (mode === 'PROMO') {
+                document.getElementById('promo-settings').classList.remove('hidden');
+            } else {
+                document.getElementById('promo-settings').classList.add('hidden');
+            }
+            
             saveSystemState(true, false); // SAVE SETTING ONLY
             renderPrintArea();
         }
@@ -1454,6 +1556,8 @@
             showQR = document.getElementById('toggle-qr').checked;
             customWarrantySmall = document.getElementById('toggle-custom-warranty').checked;
             customWarrantyTextSmall = document.getElementById('inp-custom-warranty').value;
+            globalPromoName = document.getElementById('inp-global-promo-name').value;
+            globalDate = document.getElementById('inp-global-date').value;
             saveSystemState(true, false); // SAVE SETTING ONLY
             renderPrintArea();
         }
@@ -1470,9 +1574,10 @@
             }
 
             const isNormal = printMode === 'NORMAL';
-            const pageSize = isNormal ? 6 : 24;
+            const isPromo = printMode === 'PROMO';
+            const pageSize = (isNormal || isPromo) ? 6 : 24;
             // UPDATED: Use justify-center and gap-0 to allow exact sizing (95mm x 2 = 190mm on 210mm paper)
-            const gridClass = isNormal ? 'grid-cols-2 justify-center gap-0' : 'grid-cols-3';
+            const gridClass = (isNormal || isPromo) ? 'grid-cols-2 justify-center gap-0' : 'grid-cols-3';
 
             // PAGINATION LOGIC: Chunk items
             for (let i = 0; i < items.length; i += pageSize) {
@@ -1490,15 +1595,17 @@
                     cell.className = "flex items-center justify-center break-inside-avoid relative";
                     
                     // NEW DIMENSIONS: Slightly reduced to allow padding
-                    // Normal: 98mm x 92mm. (Total width 196 + 10 padding = 206 < 210)
+                    // Normal/Promo: 98mm x 92mm. (Total width 196 + 10 padding = 206 < 210)
                     // Small: 65mm x 35mm. (Total width 195 + 10 padding = 205 < 210)
-                    cell.style.width = isNormal ? '98mm' : '65mm';
-                    cell.style.height = isNormal ? '92mm' : '35mm';
+                    cell.style.width = (isNormal || isPromo) ? '98mm' : '65mm';
+                    cell.style.height = (isNormal || isPromo) ? '92mm' : '35mm';
                     // Reduce padding to 0 for maximum size inside cell
-                    cell.style.padding = isNormal ? '0' : '2mm';
+                    cell.style.padding = (isNormal || isPromo) ? '0' : '2mm';
 
                     if (isNormal) {
                         cell.innerHTML = generateNormalStickerHTML(product);
+                    } else if (isPromo) {
+                        cell.innerHTML = generatePromoStickerHTML(product);
                     } else {
                         cell.innerHTML = generateSmallStickerHTML(product);
                     }
@@ -1612,6 +1719,78 @@
                                 ${(isFlash || isGV) ? `<div class="text-[10px] text-gray-400 line-through absolute bottom-0 right-1 bg-yellow-50 px-1 rounded">${formatPrice(product.price)}</div>` : ''}
                             `}
                         </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // --- NEW PROMO STICKER DESIGN ---
+        function generatePromoStickerHTML(product) {
+            const isCampaignActive = campaign !== 'NONE' && !excludedCampaignIds.has(product.id);
+            const isFlash = isCampaignActive && campaign === 'FL';
+            const isGV = isCampaignActive && campaign === 'GV';
+
+            // Checkbox State
+            const isChecked = !excludedCampaignIds.has(product.id);
+            const campaignToggleHTML = campaign !== 'NONE' ? `
+                <div class="toggle-campaign-wrapper hover-edit-overlay" onclick="event.stopPropagation(); toggleItemCampaign('${product.id}')" title="Bật/Tắt giá khuyến mãi cho tem này">
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} class="pointer-events-none w-3 h-3 text-blue-600 rounded">
+                    <span>CTKM</span>
+                </div>
+            ` : '';
+
+            const isGift = product.isGiftPromo && isCampaignActive;
+            const isDiscount = !product.isGiftPromo && isCampaignActive && product.salePrice;
+
+            return `
+            <div class="relative w-full h-full">
+                <!-- DELETE BUTTON (Hidden on Print) -->
+                <div class="btn-delete-sticker hover-edit-overlay" onclick="event.stopPropagation(); removeIdFromSelection('${product.id}')" title="Xóa khỏi list in">X</div>
+
+                <!-- CAMPAIGN TOGGLE (Hidden on Print) -->
+                ${campaignToggleHTML}
+
+                <div onclick="openEditModal('${product.id}')" class="promo-sticker group cursor-pointer transition-all hover:border-rose-400" title="Nhấn để chỉnh sửa">
+                    
+                    <!-- Hover Overlay -->
+                    <div class="absolute inset-0 bg-blue-500/10 hidden group-hover:flex items-center justify-center z-50 hover-edit-overlay pointer-events-none">
+                         <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-lg font-bold flex items-center gap-1"><i data-lucide="edit-2" class="w-3 h-3"></i> Sửa</span>
+                    </div>
+
+                    <div class="pattern-bg absolute inset-0 pointer-events-none"></div>
+                    <div class="bg-rose-600 min-h-[55px] flex items-center px-4 py-2 border-b-4 border-rose-700">
+                        <span class="font-black text-white text-[20px] uppercase tracking-tighter italic leading-none w-full text-center">
+                            ${globalPromoName || 'SIÊU SALE GIÁ SỐC'}
+                        </span>
+                    </div>
+                    <div class="flex-grow flex flex-col items-center text-center p-5 justify-center z-10 bg-white/90">
+                        <h2 class="text-[18px] font-extrabold text-slate-900 leading-[1.2] uppercase line-clamp-2 mb-2 w-full">
+                            ${product.name || '---'}
+                        </h2>
+                        
+                        ${isDiscount ? `
+                        <div class="mt-1">
+                            <div class="text-slate-400 line-through text-[16px] font-medium leading-none mb-1">${formatPrice(product.price)}</div>
+                            <div class="text-rose-600 font-black text-[50px] leading-none tracking-tighter whitespace-nowrap">${formatPrice(product.salePrice)}</div>
+                        </div>
+                        ` : isGift ? `
+                        <div class="mt-1 w-full px-2">
+                            <div class="text-rose-600 font-black text-[28px] leading-none mb-2">${formatPrice(product.price)}</div>
+                            <div class="bg-rose-600 text-white rounded-xl p-3 border-b-4 border-rose-800">
+                                <div class="text-[9px] text-rose-100 font-bold uppercase tracking-widest mb-1">TẶNG KÈM</div>
+                                <div class="text-[13px] font-black uppercase line-clamp-2 leading-tight">${product.giftName || ''}</div>
+                            </div>
+                        </div>
+                        ` : `
+                        <div class="mt-4">
+                            <div class="text-slate-400 text-[11px] font-bold mb-1 uppercase tracking-widest">Giá Niêm Yết</div>
+                            <div class="text-rose-600 font-black text-[50px] leading-none tracking-tighter whitespace-nowrap">${formatPrice(product.price)}</div>
+                        </div>
+                        `}
+                    </div>
+                    <div class="h-10 bg-slate-50 flex justify-between items-center px-4 text-[9px] text-slate-500 border-t border-slate-100 z-10">
+                        <span class="font-bold uppercase tracking-wider">SKU: ${product.code}</span>
+                        <span class="font-bold text-slate-700">${globalDate ? globalDate : 'CHƯƠNG TRÌNH KHUYẾN MÃI'}</span>
                     </div>
                 </div>
             </div>`;
