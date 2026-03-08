@@ -1726,21 +1726,21 @@
 
         // --- NEW PROMO STICKER DESIGN ---
         function generatePromoStickerHTML(product) {
-            const isCampaignActive = campaign !== 'NONE' && !excludedCampaignIds.has(product.id);
-            const isFlash = isCampaignActive && campaign === 'FL';
-            const isGV = isCampaignActive && campaign === 'GV';
+            // For Promo sticker, campaign is always considered active unless explicitly excluded
+            const isCampaignActive = !excludedCampaignIds.has(product.id);
 
             // Checkbox State
             const isChecked = !excludedCampaignIds.has(product.id);
-            const campaignToggleHTML = campaign !== 'NONE' ? `
+            const campaignToggleHTML = `
                 <div class="toggle-campaign-wrapper hover-edit-overlay" onclick="event.stopPropagation(); toggleItemCampaign('${product.id}')" title="Bật/Tắt giá khuyến mãi cho tem này">
                     <input type="checkbox" ${isChecked ? 'checked' : ''} class="pointer-events-none w-3 h-3 text-blue-600 rounded">
                     <span>CTKM</span>
                 </div>
-            ` : '';
+            `;
 
             const isGift = product.isGiftPromo && isCampaignActive;
             const isDiscount = !product.isGiftPromo && isCampaignActive && product.salePrice;
+            const headerBgStyle = `background-color: ${bgNameColor};`;
 
             return `
             <div class="relative w-full h-full">
@@ -1758,24 +1758,26 @@
                     </div>
 
                     <div class="pattern-bg absolute inset-0 pointer-events-none"></div>
-                    <div class="bg-rose-600 min-h-[55px] flex items-center px-4 py-2 border-b-4 border-rose-700">
+                    <div class="min-h-[55px] flex items-center px-4 py-2 border-b-4" style="${headerBgStyle} border-bottom-color: rgba(0,0,0,0.2);">
                         <span class="font-black text-white text-[20px] uppercase tracking-tighter italic leading-none w-full text-center">
                             ${globalPromoName || 'SIÊU SALE GIÁ SỐC'}
                         </span>
                     </div>
                     <div class="flex-grow flex flex-col items-center text-center p-5 justify-center z-10 bg-white/90">
-                        <h2 class="text-[18px] font-extrabold text-slate-900 leading-[1.2] uppercase line-clamp-2 mb-2 w-full">
-                            ${product.name || '---'}
-                        </h2>
+                        <div class="w-full px-3 py-2 mb-4 flex items-center justify-center min-h-[48px]">
+                            <h2 class="text-[16px] font-extrabold text-slate-900 leading-[1.2] uppercase line-clamp-2 w-full">
+                                ${product.name || '---'}
+                            </h2>
+                        </div>
                         
                         ${isDiscount ? `
-                        <div class="mt-1">
-                            <div class="text-slate-400 line-through text-[16px] font-medium leading-none mb-1">${formatPrice(product.price)}</div>
-                            <div class="text-rose-600 font-black text-[50px] leading-none tracking-tighter whitespace-nowrap">${formatPrice(product.salePrice)}</div>
+                        <div class="mt-2">
+                            <div class="text-slate-400 line-through text-[16px] font-medium leading-none mb-2">${formatPrice(product.price)}</div>
+                            <div class="text-rose-600 font-black text-[42px] leading-none tracking-tighter whitespace-nowrap">${formatPrice(product.salePrice)}</div>
                         </div>
                         ` : isGift ? `
-                        <div class="mt-1 w-full px-2">
-                            <div class="text-rose-600 font-black text-[28px] leading-none mb-2">${formatPrice(product.price)}</div>
+                        <div class="mt-2 w-full px-2">
+                            <div class="text-rose-600 font-black text-[28px] leading-none mb-3">${formatPrice(product.price)}</div>
                             <div class="bg-rose-600 text-white rounded-xl p-3 border-b-4 border-rose-800">
                                 <div class="text-[9px] text-rose-100 font-bold uppercase tracking-widest mb-1">TẶNG KÈM</div>
                                 <div class="text-[13px] font-black uppercase line-clamp-2 leading-tight">${product.giftName || ''}</div>
@@ -1783,8 +1785,8 @@
                         </div>
                         ` : `
                         <div class="mt-4">
-                            <div class="text-slate-400 text-[11px] font-bold mb-1 uppercase tracking-widest">Giá Niêm Yết</div>
-                            <div class="text-rose-600 font-black text-[50px] leading-none tracking-tighter whitespace-nowrap">${formatPrice(product.price)}</div>
+                            <div class="text-slate-400 text-[11px] font-bold mb-2 uppercase tracking-widest">Giá Niêm Yết</div>
+                            <div class="text-rose-600 font-black text-[42px] leading-none tracking-tighter whitespace-nowrap">${formatPrice(product.price)}</div>
                         </div>
                         `}
                     </div>
