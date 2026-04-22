@@ -1189,6 +1189,37 @@
             document.getElementById('modal-overlay').classList.add('hidden');
         }
 
+        function showMissingItemsModal(notFoundCodes) {
+            window.lastMissingCodes = notFoundCodes.join('\n');
+            const missingHtml = `
+                <div class="p-6">
+                    <div class="flex items-center gap-3 mb-4 text-red-600 border-b border-red-100 pb-3">
+                        <i data-lucide="alert-circle" class="w-8 h-8"></i>
+                        <h3 class="text-xl font-bold">Cảnh báo: Mã thiếu dữ liệu</h3>
+                    </div>
+                    <p class="mb-3 text-sm text-gray-600">Các mã sản phẩm sau <strong>không có trong Kho dữ liệu</strong>. Vui lòng thêm mới các mã này:</p>
+                    <div class="bg-red-50 border border-red-200 rounded p-4 max-h-60 overflow-y-auto font-mono text-sm font-bold text-red-700 shadow-inner">
+                        ${notFoundCodes.map(c => `<div>• ${c}</div>`).join('')}
+                    </div>
+                    <div class="mt-6 flex justify-end gap-2">
+                        <button onclick="copyMissingCodes()" class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-md">
+                            <i data-lucide="copy" class="w-4 h-4"></i> Copy List Mã
+                        </button>
+                        <button onclick="closeModal()" class="bg-gray-800 text-white px-6 py-2 rounded font-bold hover:bg-gray-700 transition-colors">Đã hiểu</button>
+                    </div>
+                </div>
+            `;
+            showModal(missingHtml);
+        }
+
+        window.copyMissingCodes = function() {
+            if (window.lastMissingCodes) {
+                navigator.clipboard.writeText(window.lastMissingCodes).then(() => {
+                    showToast('Đã copy danh sách mã lỗi vào bộ nhớ tạm!');
+                });
+            }
+        };
+
         // REFACTORED: Use Object Destructuring to prevent argument order mix-ups
         function generateProduct({code, name, price, link}) {
             code = code?.trim() || '';
@@ -2074,22 +2105,7 @@
             // ENHANCED NOTIFICATION FOR MISSING ITEMS
             if (notFoundCodes.length > 0) {
                 setTimeout(() => {
-                   const missingHtml = `
-                    <div class="p-6">
-                        <div class="flex items-center gap-3 mb-4 text-red-600 border-b border-red-100 pb-3">
-                            <i data-lucide="alert-circle" class="w-8 h-8"></i>
-                            <h3 class="text-xl font-bold">Cảnh báo: Mã thiếu dữ liệu</h3>
-                        </div>
-                        <p class="mb-3 text-sm text-gray-600">Các mã sản phẩm sau <strong>không có trong Kho dữ liệu</strong>. Vui lòng thêm mới các mã này trước khi in:</p>
-                        <div class="bg-red-50 border border-red-200 rounded p-4 max-h-60 overflow-y-auto font-mono text-sm font-bold text-red-700 shadow-inner">
-                            ${notFoundCodes.map(c => `<div>• ${c}</div>`).join('')}
-                        </div>
-                        <div class="mt-6 flex justify-end">
-                            <button onclick="closeModal()" class="bg-gray-800 text-white px-6 py-2 rounded font-bold hover:bg-gray-700 transition-colors">Đã hiểu</button>
-                        </div>
-                    </div>
-                   `;
-                   showModal(missingHtml);
+                   showMissingItemsModal(notFoundCodes);
                 }, 500); // Slight delay to allow previous modal to close
             }
         }
@@ -2204,22 +2220,7 @@
             
             if (notFoundCodes.length > 0) {
                 setTimeout(() => {
-                   const missingHtml = `
-                    <div class="p-6">
-                        <div class="flex items-center gap-3 mb-4 text-red-600 border-b border-red-100 pb-3">
-                            <i data-lucide="alert-circle" class="w-8 h-8"></i>
-                            <h3 class="text-xl font-bold">Cảnh báo: Mã thiếu dữ liệu</h3>
-                        </div>
-                        <p class="mb-3 text-sm text-gray-600">Các mã sản phẩm sau <strong>không có trong Kho dữ liệu</strong>. Vui lòng thêm mới các mã này:</p>
-                        <div class="bg-red-50 border border-red-200 rounded p-4 max-h-60 overflow-y-auto font-mono text-sm font-bold text-red-700 shadow-inner">
-                            ${notFoundCodes.map(c => `<div>• ${c}</div>`).join('')}
-                        </div>
-                        <div class="mt-6 flex justify-end">
-                            <button onclick="closeModal()" class="bg-gray-800 text-white px-6 py-2 rounded font-bold hover:bg-gray-700 transition-colors">Đã hiểu</button>
-                        </div>
-                    </div>
-                   `;
-                   showModal(missingHtml);
+                   showMissingItemsModal(notFoundCodes);
                 }, 500);
             }
         }
@@ -2306,22 +2307,7 @@
             
             if (notFoundCodes.length > 0) {
                 setTimeout(() => {
-                   const missingHtml = `
-                    <div class="p-6">
-                        <div class="flex items-center gap-3 mb-4 text-red-600 border-b border-red-100 pb-3">
-                            <i data-lucide="alert-circle" class="w-8 h-8"></i>
-                            <h3 class="text-xl font-bold">Cảnh báo: Mã thiếu dữ liệu</h3>
-                        </div>
-                        <p class="mb-3 text-sm text-gray-600">Các mã sản phẩm sau <strong>không có trong Kho dữ liệu</strong>. Vui lòng thêm mới các mã này:</p>
-                        <div class="bg-red-50 border border-red-200 rounded p-4 max-h-60 overflow-y-auto font-mono text-sm font-bold text-red-700 shadow-inner">
-                            ${notFoundCodes.map(c => `<div>• ${c}</div>`).join('')}
-                        </div>
-                        <div class="mt-6 flex justify-end">
-                            <button onclick="closeModal()" class="bg-gray-800 text-white px-6 py-2 rounded font-bold hover:bg-gray-700 transition-colors">Đã hiểu</button>
-                        </div>
-                    </div>
-                   `;
-                   showModal(missingHtml);
+                   showMissingItemsModal(notFoundCodes);
                 }, 500);
             }
         }
