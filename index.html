@@ -391,40 +391,47 @@
             <!-- Bulk Import Area (Split Columns) -->
             <div id="bulk-import-area" class="hidden bg-indigo-50 p-4 rounded-xl border border-indigo-100 transition-all">
                 <p class="text-xs text-indigo-700 mb-2 font-bold flex items-center gap-2">
-                    <i data-lucide="info"></i> Dán dữ liệu từ Excel. Đã sửa lỗi mất dòng do ký tự " (inch).
+                    <i data-lucide="info"></i> Dán dữ liệu từ Excel (6 Cột: Mã, Tên, Giá Gốc, Giá Sale, Bảo Hành, Link).
                 </p>
-                <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
                     <div>
                         <div class="flex justify-between items-center mb-1">
-                            <label class="text-[10px] font-bold text-gray-500 uppercase">1. Cột Mã SP (*)</label>
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">1. Mã SP (*)</label>
                             <span id="count-codes" class="text-[10px] font-bold bg-white px-1 rounded text-indigo-600">0 dòng</span>
                         </div>
                         <textarea id="bulk-codes" oninput="updateLineCounts()" class="w-full h-40 p-2 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 font-mono text-xs no-wrap-textarea" placeholder="V.GIGA.3060..."></textarea>
                     </div>
                     <div>
                         <div class="flex justify-between items-center mb-1">
-                            <label class="text-[10px] font-bold text-gray-500 uppercase">2. Cột Tên SP</label>
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">2. Tên Sản Phẩm</label>
                             <span id="count-names" class="text-[10px] font-bold bg-white px-1 rounded text-indigo-600">0 dòng</span>
                         </div>
                         <textarea id="bulk-names" oninput="updateLineCounts()" class="w-full h-40 p-2 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 font-mono text-xs no-wrap-textarea" placeholder="Tên sản phẩm..."></textarea>
                     </div>
                     <div>
                         <div class="flex justify-between items-center mb-1">
-                            <label class="text-[10px] font-bold text-gray-500 uppercase">3. Cột Giá</label>
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">3. Giá Gốc</label>
                             <span id="count-prices" class="text-[10px] font-bold bg-white px-1 rounded text-indigo-600">0 dòng</span>
                         </div>
-                        <textarea id="bulk-prices" oninput="updateLineCounts()" class="w-full h-40 p-2 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 font-mono text-xs no-wrap-textarea" placeholder="500000..."></textarea>
+                        <textarea id="bulk-prices" oninput="updateLineCounts()" class="w-full h-40 p-2 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 font-mono text-xs no-wrap-textarea" placeholder="5.500.000..."></textarea>
                     </div>
                     <div>
                         <div class="flex justify-between items-center mb-1">
-                            <label class="text-[10px] font-bold text-gray-500 uppercase">4. Cột Bảo Hành</label>
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">4. Giá Sale</label>
+                            <span id="count-saleprices" class="text-[10px] font-bold bg-white px-1 rounded text-indigo-600">0 dòng</span>
+                        </div>
+                        <textarea id="bulk-saleprices" oninput="updateLineCounts()" class="w-full h-40 p-2 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 font-mono text-xs no-wrap-textarea" placeholder="4.990.000..."></textarea>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">5. Bảo Hành</label>
                             <span id="count-warranties" class="text-[10px] font-bold bg-white px-1 rounded text-indigo-600">0 dòng</span>
                         </div>
                         <textarea id="bulk-warranties" oninput="updateLineCounts()" class="w-full h-40 p-2 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 font-mono text-xs no-wrap-textarea" placeholder="36 tháng..."></textarea>
                     </div>
                     <div>
                         <div class="flex justify-between items-center mb-1">
-                            <label class="text-[10px] font-bold text-gray-500 uppercase">5. Cột Link</label>
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">6. Link</label>
                             <span id="count-links" class="text-[10px] font-bold bg-white px-1 rounded text-indigo-600">0 dòng</span>
                         </div>
                         <textarea id="bulk-links" oninput="updateLineCounts()" class="w-full h-40 p-2 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 font-mono text-xs no-wrap-textarea" placeholder="https://..."></textarea>
@@ -1108,8 +1115,10 @@
                     if (cloudData && cloudData.length > 0) {
                         database = cloudData.map(p => ({
                             ...p,
+                            price: cleanPrice(p.price || 0),
+                            salePrice: cleanPrice(p.salePrice || 0),
                             specs: typeof p.specs === 'string' ? JSON.parse(p.specs || '[]') : (p.specs || []),
-                            isGiftPromo: p.isGiftPromo === 'true' || p.isGiftPromo === true
+                            isGiftPromo: p.isGiftPromo === 'true' || p.isGiftPromo === true || p.isGiftPromo === 1
                         }));
                         localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(database));
                         console.log('Đã tải dữ liệu từ Google Sheets');
@@ -2140,7 +2149,7 @@
                         <p class="mt-1">Dán cột <strong>Mã SP</strong>. Sau đó dán các cột thông tin mới mà bà muốn cập nhật.</p>
                         <p class="mt-1 text-xs text-gray-500">*Cột nào không muốn sửa thì để trống. Nếu dán thì số dòng phải khớp với cột Mã.</p>
                     </div>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase mb-1">1. Cột Mã SP (*)</label>
                             <textarea id="bulk-update-codes" class="w-full h-64 p-2 border border-green-200 rounded focus:outline-none focus:border-green-500 font-mono text-xs no-wrap-textarea bg-white" placeholder="V.GIGA.3060..."></textarea>
@@ -2150,11 +2159,15 @@
                             <textarea id="bulk-update-names" class="w-full h-64 p-2 border border-green-200 rounded focus:outline-none focus:border-green-500 font-mono text-xs no-wrap-textarea bg-white" placeholder="Tên sản phẩm mới..."></textarea>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">3. Cột Giá Mới</label>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">3. Cột Giá Gốc Mới</label>
                             <textarea id="bulk-update-prices" class="w-full h-64 p-2 border border-green-200 rounded focus:outline-none focus:border-green-500 font-mono text-xs no-wrap-textarea bg-white" placeholder="5.500.000..."></textarea>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">4. Bảo Hành Mới</label>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">4. Giá Sale Mới</label>
+                            <textarea id="bulk-update-saleprices" class="w-full h-64 p-2 border border-green-200 rounded focus:outline-none focus:border-green-500 font-mono text-xs no-wrap-textarea bg-white" placeholder="4.990.000..."></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">5. Bảo Hành Mới</label>
                             <textarea id="bulk-update-warranties" class="w-full h-64 p-2 border border-green-200 rounded focus:outline-none focus:border-green-500 font-mono text-xs no-wrap-textarea bg-white" placeholder="12 tháng..."></textarea>
                         </div>
                     </div>
@@ -2171,6 +2184,7 @@
             const codes = parseExcelColumn(document.getElementById('bulk-update-codes').value);
             const names = parseExcelColumn(document.getElementById('bulk-update-names').value);
             const prices = parseExcelColumn(document.getElementById('bulk-update-prices').value);
+            const saleprices = parseExcelColumn(document.getElementById('bulk-update-saleprices').value);
             const warranties = parseExcelColumn(document.getElementById('bulk-update-warranties').value);
 
             if (codes.length === 0) {
@@ -2179,24 +2193,29 @@
             }
 
             // Check if at least one update column is provided
-            if (names.length === 0 && prices.length === 0 && warranties.length === 0) {
+            if (names.length === 0 && prices.length === 0 && saleprices.length === 0 && warranties.length === 0) {
                  showToast('Vui lòng nhập Tên mới, Giá mới hoặc Bảo hành mới để cập nhật', 'warning');
                  return;
             }
 
             // Validate Names if present
             if (names.length > 0 && names.length !== codes.length) {
-                showToast(`Lỗi: Số lượng Tên (${names.length}) không khớp Mã (${codes.length}). Nếu không sửa Tên, hãy xóa trắng ô Tên.`, 'error');
+                showToast(`Lỗi: Số lượng Tên (${names.length}) không khớp Mã (${codes.length}).`, 'error');
                 return;
             }
             // Validate Prices if present
             if (prices.length > 0 && prices.length !== codes.length) {
-                showToast(`Lỗi: Số lượng Giá (${prices.length}) không khớp Mã (${codes.length}). Nếu không sửa Giá, hãy xóa trắng ô Giá.`, 'error');
+                showToast(`Lỗi: Số lượng Giá (${prices.length}) không khớp Mã (${codes.length}).`, 'error');
+                return;
+            }
+            // Validate SalePrices if present
+            if (saleprices.length > 0 && saleprices.length !== codes.length) {
+                showToast(`Lỗi: Số lượng Giá Sale (${saleprices.length}) không khớp Mã (${codes.length}).`, 'error');
                 return;
             }
             // Validate Warranties if present
             if (warranties.length > 0 && warranties.length !== codes.length) {
-                showToast(`Lỗi: Số lượng Bảo Hành (${warranties.length}) không khớp Mã (${codes.length}). Nếu không sửa Bảo Hành, hãy xóa trắng ô Bảo Hành.`, 'error');
+                showToast(`Lỗi: Số lượng Bảo Hành (${warranties.length}) không khớp Mã (${codes.length}).`, 'error');
                 return;
             }
 
@@ -2209,6 +2228,7 @@
 
                 const nameRaw = (names.length > 0) ? (names[i] || '').trim() : '';
                 const priceRaw = (prices.length > 0) ? (prices[i] || '').trim() : '';
+                const salePriceRaw = (saleprices.length > 0) ? (saleprices[i] || '').trim() : '';
                 const warrantyRaw = (warranties.length > 0) ? (warranties[i] || '').trim() : '';
                 
                 // CÁCH MỚI (CHÍNH XÁC 100%): So sánh tuyệt đối
@@ -2226,6 +2246,14 @@
                         const newPrice = cleanPrice(priceRaw);
                         if (newPrice > 0) {
                             product.price = newPrice;
+                            changed = true;
+                        }
+                    }
+                    // Update Sale Price logic
+                    if (saleprices.length > 0 && salePriceRaw) {
+                        const newSalePrice = cleanPrice(salePriceRaw);
+                        if (newSalePrice > 0) {
+                            product.salePrice = newSalePrice;
                             changed = true;
                         }
                     }
@@ -2471,7 +2499,7 @@
             const area = document.getElementById('bulk-import-area');
             const btnText = document.getElementById('bulk-btn-text');
             area.classList.toggle('hidden');
-            btnText.textContent = area.classList.contains('hidden') ? 'Nhập hàng loạt (5 Cột)' : 'Ẩn nhập liệu';
+            btnText.textContent = area.classList.contains('hidden') ? 'Nhập hàng loạt (6 Cột)' : 'Ẩn nhập liệu';
         }
 
         // IMPROVED: Excel CSV-like parsing to handle quoted multi-line strings
@@ -2508,12 +2536,14 @@
             const codes = parseExcelColumn(document.getElementById('bulk-codes').value);
             const names = parseExcelColumn(document.getElementById('bulk-names').value);
             const prices = parseExcelColumn(document.getElementById('bulk-prices').value);
+            const saleprices = parseExcelColumn(document.getElementById('bulk-saleprices').value);
             const warranties = parseExcelColumn(document.getElementById('bulk-warranties').value);
             const links = parseExcelColumn(document.getElementById('bulk-links').value);
 
             document.getElementById('count-codes').textContent = `${codes.length} dòng`;
             document.getElementById('count-names').textContent = `${names.length} dòng`;
             document.getElementById('count-prices').textContent = `${prices.length} dòng`;
+            document.getElementById('count-saleprices').textContent = `${saleprices.length} dòng`;
             document.getElementById('count-warranties').textContent = `${warranties.length} dòng`;
             document.getElementById('count-links').textContent = `${links.length} dòng`;
 
@@ -2526,11 +2556,11 @@
         }
 
         function processBulkImport() {
-            const codes = document.getElementById('bulk-codes').value.split('\n')
-                .map(line => line.trim()) // Luôn luôn trim() từng dòng
+            const codes = parseExcelColumn(document.getElementById('bulk-codes').value)
                 .filter(line => line !== "");
             const names = parseExcelColumn(document.getElementById('bulk-names').value);
             const prices = parseExcelColumn(document.getElementById('bulk-prices').value);
+            const saleprices = parseExcelColumn(document.getElementById('bulk-saleprices').value);
             const warranties = parseExcelColumn(document.getElementById('bulk-warranties').value);
             const links = parseExcelColumn(document.getElementById('bulk-links').value);
 
@@ -2552,7 +2582,8 @@
                 }
 
                 const name = names[i] || '';
-                const price = prices[i] || '';
+                const price = cleanPrice(prices[i] || 0);
+                const salePrice = cleanPrice(saleprices[i] || 0);
                 const warranty = warranties[i] || '';
                 const link = links[i] || '';
 
@@ -2564,6 +2595,7 @@
                 });
 
                 if (product) {
+                    product.salePrice = salePrice;
                     product.warranty = warranty;
                     database.unshift(product);
                     selectedIds.add(product.id);
@@ -2575,6 +2607,7 @@
             document.getElementById('bulk-codes').value = '';
             document.getElementById('bulk-names').value = '';
             document.getElementById('bulk-prices').value = '';
+            document.getElementById('bulk-saleprices').value = '';
             document.getElementById('bulk-warranties').value = '';
             document.getElementById('bulk-links').value = '';
             
