@@ -267,13 +267,18 @@
                 </div>
             </div>
             
-            <div class="flex bg-orange-700 p-1 rounded-lg gap-1">
+            <div class="flex bg-orange-700 p-1 rounded-lg gap-1 items-center">
                 <button onclick="switchTab('DATABASE')" id="btn-tab-db" class="px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 bg-white text-orange-600 shadow transition-colors">
                     <i data-lucide="database" class="w-4 h-4"></i> Kho Dữ Liệu
                 </button>
                 <button onclick="switchTab('PRINT')" id="btn-tab-print" class="px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 text-white/70 hover:text-white transition-colors">
                     <i data-lucide="printer" class="w-4 h-4"></i> Xem Trang In
                     <span id="selected-count-badge" class="bg-white text-orange-600 px-1.5 rounded-full text-xs">0</span>
+                </button>
+                <button onclick="openDiagnosticsModal()" id="btn-header-diag" class="px-3 py-2 rounded-md font-bold text-xs flex items-center gap-1.5 text-white bg-orange-800/60 hover:bg-orange-800 transition-colors shadow-sm" title="Nhật ký hoạt động & Khôi phục dữ liệu">
+                    <i data-lucide="shield-check" class="w-4 h-4 text-green-300"></i>
+                    <span class="hidden md:inline">Nhật Ký & Sao Lưu</span>
+                    <span id="log-count-badge" class="bg-white/20 text-white px-1.5 py-0.5 rounded-full text-[10px] font-mono">0</span>
                 </button>
             </div>
         </div>
@@ -353,6 +358,9 @@
                     <div class="flex-1"></div>
 
                     <div class="flex gap-2">
+                        <button onclick="openDiagnosticsModal()" class="flex items-center gap-1 bg-purple-50 border border-purple-300 text-purple-700 px-3 py-1.5 rounded text-xs font-bold hover:bg-purple-100 shadow-sm" title="Xem nhật ký hoạt động, chẩn đoán lỗi & khôi phục dữ liệu">
+                            <i data-lucide="clipboard-list" class="w-4 h-4 text-purple-600"></i> Nhật Ký & Khôi Phục
+                        </button>
                         <button onclick="handleGasUrlChange()" class="flex items-center gap-1 bg-white border border-green-200 text-green-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-green-50" title="Phục hồi dữ liệu từ Google Sheets">
                             <i data-lucide="cloud-download" class="w-4 h-4"></i> Tải từ Cloud
                         </button>
@@ -642,14 +650,21 @@
         // --- 0. STORAGE KEYS ---
         const STORAGE_KEY_DB = 'printstar_db_v1';
         const STORAGE_KEY_SETTINGS = 'printstar_settings_v1';
+        const STORAGE_KEY_LOGS = 'printstar_audit_logs_v1';
+        const STORAGE_KEY_BACKUPS = 'printstar_backups_v1';
+        const STORAGE_KEY_DELETED = 'printstar_deleted_ids_v1';
+
+        // Flag to prevent race conditions during initial load
+        let isInitialLoadComplete = false;
 
         // --- SOCKET.IO ---
         const socket = io();
         let isRemoteUpdate = false;
 
         socket.on('sync_selection', (data) => {
+            if (!data) return;
             isRemoteUpdate = true;
-            selectedIds = new Set(data.selectedIds);
+            if (data.selectedIds) selectedIds = new Set(data.selectedIds);
             
             // Sync settings if provided
             if (data.settings) {
@@ -665,37 +680,52 @@
                 if (data.settings.globalDate !== undefined) globalDate = data.settings.globalDate;
                 
                 // Update UI
-                document.getElementById('sel-campaign').value = campaign;
-                document.getElementById('color-promo').value = promoColor;
-                document.getElementById('color-bg-name').value = bgNameColor;
-                document.getElementById('toggle-qr').checked = showQR;
-                document.getElementById('toggle-custom-warranty').checked = customWarrantySmall;
-                document.getElementById('inp-custom-warranty').value = customWarrantyTextSmall;
-                document.getElementById('inp-global-promo-name').value = globalPromoName;
-                document.getElementById('inp-global-date').value = globalDate;
+                const elCamp = document.getElementById('sel-campaign'); if (elCamp) elCamp.value = campaign;
+                const elPromo = document.getElementById('color-promo'); if (elPromo) elPromo.value = promoColor;
+                const elBg = document.getElementById('color-bg-name'); if (elBg) elBg.value = bgNameColor;
+                const elQR = document.getElementById('toggle-qr'); if (elQR) elQR.checked = showQR;
+                const elCW = document.getElementById('toggle-custom-warranty'); if (elCW) elCW.checked = customWarrantySmall;
+                const elCWT = document.getElementById('inp-custom-warranty'); if (elCWT) elCWT.value = customWarrantyTextSmall;
+                const elGPN = document.getElementById('inp-global-promo-name'); if (elGPN) elGPN.value = globalPromoName;
+                const elGD = document.getElementById('inp-global-date'); if (elGD) elGD.value = globalDate;
                 toggleCustomWarrantyInput();
                 
-                document.getElementById('btn-mode-normal').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'NORMAL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
-                document.getElementById('btn-mode-small').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'SMALL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
-                document.getElementById('btn-mode-promo').className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'PROMO' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+                const btnNorm = document.getElementById('btn-mode-normal'); if (btnNorm) btnNorm.className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'NORMAL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+                const btnSmall = document.getElementById('btn-mode-small'); if (btnSmall) btnSmall.className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'SMALL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
+                const btnPromo = document.getElementById('btn-mode-promo'); if (btnPromo) btnPromo.className = `p-2 rounded border text-sm font-bold transition-all ${printMode === 'PROMO' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`;
                 
-                if (printMode === 'PROMO') {
-                    document.getElementById('promo-settings').classList.remove('hidden');
-                } else {
-                    document.getElementById('promo-settings').classList.add('hidden');
+                const promoSet = document.getElementById('promo-settings');
+                if (promoSet) {
+                    if (printMode === 'PROMO') {
+                        promoSet.classList.remove('hidden');
+                    } else {
+                        promoSet.classList.add('hidden');
+                    }
                 }
             }
 
-            saveSystemState(false); // don't emit back
+            saveSystemState(false, false); // don't emit back and DO NOT sync cloud
             renderTable();
             renderPrintArea();
             isRemoteUpdate = false;
         });
 
         socket.on('sync_database', (data) => {
+            if (!data || !Array.isArray(data.database)) return;
+            if (data.database.length === 0 && database.length > 0) {
+                console.warn('Bảo vệ dữ liệu: Bỏ qua sync_database rỗng từ máy khác');
+                return;
+            }
+            const prevCount = database.length;
             isRemoteUpdate = true;
             database = data.database;
             localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(database));
+            if (typeof activityLogger !== 'undefined') {
+                activityLogger.log('SOCKET_SYNC_DB', `Đồng bộ kho sản phẩm từ máy khác (${database.length} SP)`, {
+                    countBefore: prevCount,
+                    countAfter: database.length
+                }, prevCount, database.length);
+            }
             renderTable();
             renderPrintArea();
             isRemoteUpdate = false;
@@ -918,7 +948,583 @@
         // Sorting State
         let sortConfig = { key: 'id', direction: 'asc' }; // default no sort (id is random but stable order)
 
-        // --- 2. STORAGE UTILS ---
+        // --- 2. AUDIT LOGGING & BACKUP SNAPSHOT SYSTEM ---
+        let deletedProductIds = new Set();
+        try {
+            const rawDel = localStorage.getItem(STORAGE_KEY_DELETED);
+            if (rawDel) deletedProductIds = new Set(JSON.parse(rawDel));
+        } catch(e) {}
+
+        function saveDeletedProductIds() {
+            try {
+                const arr = Array.from(deletedProductIds);
+                if (arr.length > 500) arr.splice(0, arr.length - 500);
+                localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify(arr));
+            } catch(e) {}
+        }
+
+        const activityLogger = {
+            getLogs() {
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY_LOGS);
+                    return raw ? JSON.parse(raw) : [];
+                } catch(e) {
+                    return [];
+                }
+            },
+            log(type, summary, details = {}, countBefore = null, countAfter = null) {
+                const logs = this.getLogs();
+                const now = new Date();
+                const entry = {
+                    id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                    timestamp: now.toISOString(),
+                    timeStr: now.toLocaleDateString('vi-VN') + ' ' + now.toLocaleTimeString('vi-VN'),
+                    type, // 'DELETE_PRODUCT' | 'ADD_PRODUCT' | 'EDIT_PRODUCT' | 'BULK_IMPORT' | 'BULK_UPDATE_INFO' | 'BULK_UPDATE_SALE' | 'BULK_CAMPAIGN' | 'CLEAR_ALL' | 'CLEAR_CAMPAIGN' | 'JSON_IMPORT' | 'CLOUD_PUSH' | 'CLOUD_PULL' | 'BACKUP_RESTORE' | 'WARN_PROTECTION' | 'ERROR' | 'SOCKET_SYNC_DB'
+                    summary,
+                    details: details || {},
+                    countBefore: countBefore !== null ? countBefore : (database ? database.length : 0),
+                    countAfter: countAfter !== null ? countAfter : (database ? database.length : 0),
+                    delta: (countAfter !== null && countBefore !== null) ? (countAfter - countBefore) : 0
+                };
+                logs.unshift(entry);
+                if (logs.length > 500) logs.length = 500;
+                try {
+                    localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(logs));
+                } catch(e) {
+                    console.error('Lỗi ghi audit log vào localStorage', e);
+                }
+                this.updateBadge();
+
+                // Send asynchronously to backend proxy for combined debugging
+                try {
+                    fetch('/api/logs', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(entry)
+                    }).catch(() => {});
+                } catch(e) {}
+            },
+            updateBadge() {
+                const el = document.getElementById('log-count-badge');
+                if (el) {
+                    const count = this.getLogs().length;
+                    el.textContent = count > 99 ? '99+' : count;
+                }
+            },
+            clear() {
+                localStorage.removeItem(STORAGE_KEY_LOGS);
+                this.updateBadge();
+                showToast('Đã xóa trắng danh sách nhật ký', 'info');
+            },
+            exportJSON() {
+                const logs = this.getLogs();
+                const backups = backupManager.getBackups().map(b => ({
+                    id: b.id,
+                    timestamp: b.timestamp,
+                    timeStr: b.timeStr,
+                    reason: b.reason,
+                    itemCount: b.count || (b.items ? b.items.length : 0)
+                }));
+                const fullDiagnostic = {
+                    title: "PrintStar Pro - Comprehensive Diagnostic & Audit Report",
+                    exportDate: new Date().toISOString(),
+                    currentDatabaseCount: database.length,
+                    databasePreview: database.slice(0, 10).map(p => ({ code: p.code, name: p.name, price: p.price, salePrice: p.salePrice })),
+                    deletedTombstonesCount: deletedProductIds.size,
+                    deletedTombstonesList: Array.from(deletedProductIds),
+                    auditLogsCount: logs.length,
+                    auditLogs: logs,
+                    backupsSummary: backups,
+                    clientInfo: {
+                        userAgent: navigator.userAgent,
+                        origin: window.location.origin,
+                        protocol: window.location.protocol
+                    }
+                };
+                const blob = new Blob([JSON.stringify(fullDiagnostic, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `printstar_diagnostic_logs_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+                a.click();
+                showToast('Đã tải xuống file Nhật ký & Chuẩn đoán (JSON)', 'success');
+            },
+            exportTXT() {
+                const logs = this.getLogs();
+                let txt = `=======================================================================\n`;
+                txt += `PRINTSTAR PRO - BÁO CÁO NHẬT KÝ HOẠT ĐỘNG & CHẨN ĐOÁN DỮ LIỆU\n`;
+                txt += `Thời gian xuất: ${new Date().toLocaleString('vi-VN')}\n`;
+                txt += `Số lượng sản phẩm trong kho hiện tại: ${database.length}\n`;
+                txt += `Số lượt ghi nhận hoạt động: ${logs.length}\n`;
+                txt += `=======================================================================\n\n`;
+
+                logs.forEach((l, idx) => {
+                    txt += `[#${logs.length - idx}] [${l.timeStr}] [${l.type}]\n`;
+                    txt += `Nội dung: ${l.summary}\n`;
+                    txt += `Biến động SP: Trước=${l.countBefore} -> Sau=${l.countAfter} (${l.delta >= 0 ? '+' : ''}${l.delta})\n`;
+                    if (l.details && Object.keys(l.details).length > 0) {
+                        txt += `Chi tiết kỹ thuật: ${JSON.stringify(l.details, null, 2)}\n`;
+                    }
+                    txt += `-----------------------------------------------------------------------\n`;
+                });
+
+                const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `printstar_report_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.txt`;
+                a.click();
+                showToast('Đã tải xuống file Báo cáo dạng Văn bản (.txt)', 'success');
+            }
+        };
+
+        const backupManager = {
+            getBackups() {
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY_BACKUPS);
+                    return raw ? JSON.parse(raw) : [];
+                } catch(e) {
+                    return [];
+                }
+            },
+            createBackup(reason, customItems = null) {
+                const backups = this.getBackups();
+                const itemsToSave = customItems || database;
+                if (!itemsToSave || !Array.isArray(itemsToSave) || itemsToSave.length === 0) return null;
+
+                const now = new Date();
+                const backupEntry = {
+                    id: 'backup_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                    timestamp: now.toISOString(),
+                    timeStr: now.toLocaleDateString('vi-VN') + ' ' + now.toLocaleTimeString('vi-VN'),
+                    reason: reason || 'Tự động sao lưu',
+                    count: itemsToSave.length,
+                    sampleCodes: itemsToSave.slice(0, 4).map(p => p.code).join(', '),
+                    items: JSON.parse(JSON.stringify(itemsToSave))
+                };
+                backups.unshift(backupEntry);
+                if (backups.length > 25) backups.length = 25;
+                try {
+                    localStorage.setItem(STORAGE_KEY_BACKUPS, JSON.stringify(backups));
+                } catch(e) {
+                    console.error('Lỗi khi lưu backup vào localStorage (có thể vượt quota), tự động giảm kích thước', e);
+                    if (backups.length > 8) {
+                        backups.length = 8;
+                        try { localStorage.setItem(STORAGE_KEY_BACKUPS, JSON.stringify(backups)); } catch(err) {}
+                    }
+                }
+                return backupEntry;
+            },
+            restoreBackup(backupId) {
+                const backups = this.getBackups();
+                const target = backups.find(b => b.id === backupId);
+                if (!target) {
+                    showToast('Không tìm thấy bản sao lưu này!', 'error');
+                    return false;
+                }
+                if (!confirm(`Bạn có chắc chắn muốn KHÔI PHỤC lại bản sao lưu lúc ${target.timeStr} (${target.count} sản phẩm)?\n\nHệ thống sẽ tự động tạo một bản sao lưu trạng thái hiện tại trước khi khôi phục.`)) {
+                    return false;
+                }
+                // Create safeguard backup of current state
+                this.createBackup(`Trước khi khôi phục bản ${target.timeStr}`, database);
+                const countBefore = database.length;
+                database = JSON.parse(JSON.stringify(target.items));
+                saveSystemState(true, true);
+                renderTable();
+                renderPrintArea();
+                activityLogger.log('BACKUP_RESTORE', `Đã khôi phục dữ liệu từ bản sao lưu lúc ${target.timeStr} (${target.count} SP)`, {
+                    backupId: target.id,
+                    backupTime: target.timeStr,
+                    countBefore: countBefore,
+                    countAfter: database.length
+                }, countBefore, database.length);
+                showToast(`Đã khôi phục thành công ${database.length} sản phẩm!`, 'success');
+                if (window.currentDiagTab === 'backups') {
+                    renderDiagnosticsTab('backups');
+                }
+                return true;
+            },
+            exportBackup(backupId) {
+                const backups = this.getBackups();
+                const target = backups.find(b => b.id === backupId);
+                if (!target) return;
+                const blob = new Blob([JSON.stringify(target.items, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `printstar_backup_${target.count}sp_${target.timeStr.replace(/[/,: ]/g, '_')}.json`;
+                a.click();
+                showToast(`Đã tải xuống bản sao lưu ${target.count} sản phẩm`, 'success');
+            }
+        };
+
+        // --- DIAGNOSTICS & BACKUP UI CONTROLLER ---
+        window.currentDiagTab = 'logs';
+        window.diagSearchQuery = '';
+        window.diagTypeFilter = 'ALL';
+
+        function openDiagnosticsModal() {
+            const logs = activityLogger.getLogs();
+            const backups = backupManager.getBackups();
+
+            const html = `
+                <div class="flex flex-col max-h-[85vh] h-[85vh]">
+                    <!-- Header -->
+                    <div class="flex justify-between items-center px-6 py-4 border-b bg-gray-50 rounded-t-xl">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 shadow-sm">
+                                <i data-lucide="shield-check" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-gray-800">Nhật Ký & Khôi Phục Dữ Liệu</h2>
+                                <p class="text-xs text-gray-500">Giám sát mọi thao tác, đồng bộ Cloud và điểm khôi phục tự động chống mất mát dữ liệu</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="activityLogger.exportJSON()" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-xs font-bold flex items-center gap-1.5 transition-colors border border-blue-200 shadow-sm">
+                                <i data-lucide="download" class="w-3.5 h-3.5"></i> Xuất JSON
+                            </button>
+                            <button onclick="activityLogger.exportTXT()" class="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded text-xs font-bold flex items-center gap-1.5 transition-colors border border-gray-300 shadow-sm">
+                                <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Xuất Báo Cáo TXT
+                            </button>
+                            <button onclick="closeModal()" class="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-200 transition-colors">
+                                <i data-lucide="x" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Navigation Tabs inside Modal -->
+                    <div class="flex border-b px-6 bg-white gap-2 pt-2">
+                        <button onclick="switchDiagTab('logs')" id="diag-tab-btn-logs" class="px-4 py-2.5 font-bold text-sm border-b-2 flex items-center gap-2 transition-colors">
+                            <i data-lucide="list-checks" class="w-4 h-4"></i> Nhật Ký Thao Tác
+                            <span id="diag-badge-logs" class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full font-mono font-normal">${logs.length}</span>
+                        </button>
+                        <button onclick="switchDiagTab('backups')" id="diag-tab-btn-backups" class="px-4 py-2.5 font-bold text-sm border-b-2 flex items-center gap-2 transition-colors">
+                            <i data-lucide="archive" class="w-4 h-4"></i> Điểm Khôi Phục (Backups)
+                            <span id="diag-badge-backups" class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full font-mono font-normal">${backups.length}</span>
+                        </button>
+                        <button onclick="switchDiagTab('server')" id="diag-tab-btn-server" class="px-4 py-2.5 font-bold text-sm border-b-2 flex items-center gap-2 transition-colors">
+                            <i data-lucide="server" class="w-4 h-4"></i> Nhật Ký Máy Chủ (Cloud Proxy)
+                        </button>
+                    </div>
+
+                    <!-- Tab Contents Container -->
+                    <div id="diag-tab-content" class="flex-1 overflow-y-auto p-6 bg-gray-50">
+                        <!-- Rendered by JS -->
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="px-6 py-3 border-t bg-white flex justify-between items-center rounded-b-xl text-xs text-gray-500">
+                        <div class="flex items-center gap-4">
+                            <span>Kho hiện có: <strong class="text-orange-600">${database.length}</strong> SP</span>
+                            <span class="text-gray-300">|</span>
+                            <span>Trạng thái Cloud: <strong class="${document.getElementById('inp-gas-url')?.value ? 'text-green-600' : 'text-gray-400'}">${document.getElementById('inp-gas-url')?.value ? 'Đã kết nối' : 'Chưa cấu hình link GAS'}</strong></span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="manualCreateBackupPrompt()" class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded font-bold text-xs flex items-center gap-1 shadow-sm transition-colors">
+                                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Tạo Bản Sao Lưu Ngay
+                            </button>
+                            <button onclick="closeModal()" class="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded font-bold text-xs transition-colors">
+                                Đóng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            showModal(html);
+            switchDiagTab(window.currentDiagTab || 'logs');
+        }
+
+        function switchDiagTab(tab) {
+            window.currentDiagTab = tab;
+            const btnLogs = document.getElementById('diag-tab-btn-logs');
+            const btnBackups = document.getElementById('diag-tab-btn-backups');
+            const btnServer = document.getElementById('diag-tab-btn-server');
+
+            if (btnLogs && btnBackups && btnServer) {
+                btnLogs.className = `px-4 py-2.5 font-bold text-sm border-b-2 flex items-center gap-2 transition-colors ${tab === 'logs' ? 'border-orange-600 text-orange-600 bg-orange-50/50' : 'border-transparent text-gray-500 hover:text-gray-700'}`;
+                btnBackups.className = `px-4 py-2.5 font-bold text-sm border-b-2 flex items-center gap-2 transition-colors ${tab === 'backups' ? 'border-orange-600 text-orange-600 bg-orange-50/50' : 'border-transparent text-gray-500 hover:text-gray-700'}`;
+                btnServer.className = `px-4 py-2.5 font-bold text-sm border-b-2 flex items-center gap-2 transition-colors ${tab === 'server' ? 'border-orange-600 text-orange-600 bg-orange-50/50' : 'border-transparent text-gray-500 hover:text-gray-700'}`;
+            }
+
+            renderDiagnosticsTab(tab);
+        }
+
+        function renderDiagnosticsTab(tab) {
+            const container = document.getElementById('diag-tab-content');
+            if (!container) return;
+
+            if (tab === 'logs') {
+                renderDiagLogsTab(container);
+            } else if (tab === 'backups') {
+                renderDiagBackupsTab(container);
+            } else if (tab === 'server') {
+                renderDiagServerTab(container);
+            }
+            lucide.createIcons();
+        }
+
+        function renderDiagLogsTab(container) {
+            const logs = activityLogger.getLogs();
+            const filter = window.diagTypeFilter || 'ALL';
+            const query = (window.diagSearchQuery || '').toLowerCase().trim();
+
+            const filteredLogs = logs.filter(l => {
+                if (filter === 'CLOUD' && !['CLOUD_PUSH', 'CLOUD_PULL'].includes(l.type)) return false;
+                if (filter === 'MUTATION' && !['ADD_PRODUCT', 'EDIT_PRODUCT', 'DELETE_PRODUCT', 'CLEAR_ALL', 'CLEAR_CAMPAIGN'].includes(l.type)) return false;
+                if (filter === 'BULK' && !['BULK_IMPORT', 'BULK_UPDATE_INFO', 'BULK_UPDATE_SALE', 'IMPORT_JSON', 'IMPORT_JSON_REPLACE', 'IMPORT_JSON_KEEP', 'IMPORT_JSON_BOTH'].includes(l.type)) return false;
+                if (filter === 'WARN' && !['WARN_PROTECTION', 'ERROR'].includes(l.type)) return false;
+                if (filter === 'BACKUP' && !['BACKUP_RESTORE'].includes(l.type)) return false;
+
+                if (query) {
+                    const matchSummary = (l.summary || '').toLowerCase().includes(query);
+                    const matchType = (l.type || '').toLowerCase().includes(query);
+                    const matchDetails = JSON.stringify(l.details || {}).toLowerCase().includes(query);
+                    return matchSummary || matchType || matchDetails;
+                }
+                return true;
+            });
+
+            const getTypeBadge = (type) => {
+                switch(type) {
+                    case 'CLOUD_PUSH':
+                        return '<span class="bg-green-100 text-green-800 border border-green-300 text-[10px] font-bold px-2 py-0.5 rounded">ĐẨY CLOUD</span>';
+                    case 'CLOUD_PULL':
+                        return '<span class="bg-blue-100 text-blue-800 border border-blue-300 text-[10px] font-bold px-2 py-0.5 rounded">TẢI CLOUD</span>';
+                    case 'DELETE_PRODUCT':
+                    case 'CLEAR_ALL':
+                        return '<span class="bg-red-100 text-red-800 border border-red-300 text-[10px] font-bold px-2 py-0.5 rounded">XÓA SP</span>';
+                    case 'ADD_PRODUCT':
+                        return '<span class="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded">THÊM SP</span>';
+                    case 'EDIT_PRODUCT':
+                    case 'BULK_UPDATE_INFO':
+                    case 'BULK_UPDATE_SALE':
+                        return '<span class="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded">SỬA ĐỔI</span>';
+                    case 'BULK_IMPORT':
+                    case 'IMPORT_JSON':
+                    case 'IMPORT_JSON_REPLACE':
+                    case 'IMPORT_JSON_KEEP':
+                        return '<span class="bg-indigo-100 text-indigo-800 border border-indigo-300 text-[10px] font-bold px-2 py-0.5 rounded">NHẬP LIỆU</span>';
+                    case 'WARN_PROTECTION':
+                        return '<span class="bg-purple-100 text-purple-800 border border-purple-300 text-[10px] font-bold px-2 py-0.5 rounded">BẢO VỆ DỮ LIỆU</span>';
+                    case 'BACKUP_RESTORE':
+                        return '<span class="bg-teal-100 text-teal-800 border border-teal-300 text-[10px] font-bold px-2 py-0.5 rounded">KHÔI PHỤC</span>';
+                    case 'ERROR':
+                        return '<span class="bg-red-200 text-red-900 border border-red-400 text-[10px] font-bold px-2 py-0.5 rounded">LỖI</span>';
+                    default:
+                        return `<span class="bg-gray-100 text-gray-800 text-[10px] font-bold px-2 py-0.5 rounded">${type}</span>`;
+                }
+            };
+
+            const logRows = filteredLogs.map((l, index) => {
+                const deltaBadge = l.delta !== 0 
+                    ? `<span class="font-mono text-xs font-bold ${l.delta > 0 ? 'text-green-600' : 'text-red-600'}">${l.delta > 0 ? '+' : ''}${l.delta} SP</span>`
+                    : `<span class="text-gray-400 text-xs">-</span>`;
+
+                return `
+                    <tr class="border-b hover:bg-white transition-colors text-xs">
+                        <td class="p-3 text-gray-500 whitespace-nowrap font-mono">${l.timeStr}</td>
+                        <td class="p-3 whitespace-nowrap">${getTypeBadge(l.type)}</td>
+                        <td class="p-3 font-medium text-gray-800">
+                            <div>${l.summary}</div>
+                            ${l.details && Object.keys(l.details).length > 0 ? `<div class="text-[11px] text-gray-500 font-mono mt-1 bg-gray-50 p-1.5 rounded border max-h-24 overflow-y-auto">${JSON.stringify(l.details)}</div>` : ''}
+                        </td>
+                        <td class="p-3 whitespace-nowrap text-center">
+                            <span class="text-gray-600 font-mono font-bold">${l.countBefore ?? '-'}</span>
+                            <i data-lucide="arrow-right" class="w-3 h-3 inline text-gray-400 mx-1"></i>
+                            <span class="text-gray-800 font-mono font-bold">${l.countAfter ?? '-'}</span>
+                        </td>
+                        <td class="p-3 whitespace-nowrap text-center">${deltaBadge}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <!-- Filters & Search Bar -->
+                    <div class="flex flex-col md:flex-row justify-between items-center gap-3 bg-white p-3 rounded-lg border shadow-sm">
+                        <div class="flex items-center gap-2 w-full md:w-auto">
+                            <div class="relative flex-1 md:w-64">
+                                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="text" value="${window.diagSearchQuery || ''}" oninput="window.diagSearchQuery = this.value; renderDiagnosticsTab('logs');" placeholder="Tìm kiếm nhật ký..." class="w-full pl-9 pr-3 py-1.5 text-xs border rounded-md focus:ring-1 focus:ring-orange-500 outline-none">
+                            </div>
+                            <select onchange="window.diagTypeFilter = this.value; renderDiagnosticsTab('logs');" class="text-xs border rounded-md py-1.5 px-2 bg-white outline-none">
+                                <option value="ALL" ${filter === 'ALL' ? 'selected' : ''}>Tất cả loại thao tác</option>
+                                <option value="CLOUD" ${filter === 'CLOUD' ? 'selected' : ''}>Đẩy / Tải Cloud</option>
+                                <option value="MUTATION" ${filter === 'MUTATION' ? 'selected' : ''}>Thêm / Sửa / Xóa SP</option>
+                                <option value="BULK" ${filter === 'BULK' ? 'selected' : ''}>Nhập liệu hàng loạt</option>
+                                <option value="WARN" ${filter === 'WARN' ? 'selected' : ''}>Bảo vệ & Lỗi</option>
+                                <option value="BACKUP" ${filter === 'BACKUP' ? 'selected' : ''}>Khôi phục sao lưu</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-gray-500 w-full md:w-auto justify-end">
+                            <span>Hiển thị <strong>${filteredLogs.length}</strong> / <strong>${logs.length}</strong> nhật ký</span>
+                            <button onclick="activityLogger.clearLogs()" class="text-red-600 hover:text-red-700 hover:bg-red-50 px-2.5 py-1 rounded border border-red-200 font-bold transition-colors">
+                                Xóa Nhật Ký
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Logs Table -->
+                    <div class="bg-white rounded-lg border shadow-sm overflow-hidden">
+                        <div class="max-h-[50vh] overflow-y-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-gray-100 text-gray-600 uppercase text-[10px] font-bold sticky top-0 border-b z-10">
+                                    <tr>
+                                        <th class="p-3 w-40">Thời Gian</th>
+                                        <th class="p-3 w-32">Loại Hành Động</th>
+                                        <th class="p-3">Chi Tiết Thao Tác</th>
+                                        <th class="p-3 w-36 text-center">Biến Động SP</th>
+                                        <th class="p-3 w-24 text-center">Tăng/Giảm</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${filteredLogs.length > 0 ? logRows : `
+                                        <tr>
+                                            <td colspan="5" class="p-8 text-center text-gray-400">
+                                                <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                                                Chưa có ghi nhận nhật ký nào phù hợp
+                                            </td>
+                                        </tr>
+                                    `}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDiagBackupsTab(container) {
+            const backups = backupManager.getBackups();
+
+            const backupCards = backups.map(b => `
+                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:border-orange-300 transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-sm text-gray-800 flex items-center gap-1.5">
+                                <i data-lucide="clock" class="w-4 h-4 text-orange-500"></i> ${b.timeStr}
+                            </span>
+                            <span class="bg-orange-100 text-orange-800 text-xs font-bold px-2 py-0.5 rounded-full font-mono">
+                                ${b.count} Sản Phẩm
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-600 font-medium">Lý do: <span class="text-gray-800">${b.reason}</span></p>
+                        ${b.sampleCodes ? `<p class="text-[11px] text-gray-400 font-mono">Ví dụ mã: ${b.sampleCodes}...</p>` : ''}
+                    </div>
+                    <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+                        <button onclick="backupManager.exportBackup('${b.id}')" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs font-bold flex items-center gap-1 transition-colors border">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i> Tải JSON
+                        </button>
+                        <button onclick="backupManager.restoreBackup('${b.id}')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold flex items-center gap-1 shadow-sm transition-colors">
+                            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Khôi Phục Bản Này
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl text-xs text-amber-900 flex items-start gap-3">
+                        <i data-lucide="info" class="w-5 h-5 text-amber-600 shrink-0 mt-0.5"></i>
+                        <div>
+                            <strong class="font-bold">Cơ chế bảo vệ chống mất dữ liệu:</strong>
+                            <p class="mt-1">Mỗi khi có thao tác có thể làm giảm số lượng sản phẩm (như Tải từ Cloud, Xóa SP, Xóa toàn bộ, hoặc Nhập file), hệ thống <strong>tự động chụp ảnh sao lưu (Snapshot)</strong>. Nếu phát hiện bị mất sản phẩm bất thường, bạn chỉ cần bấm nút <strong>"Khôi Phục Bản Này"</strong> để lấy lại toàn bộ danh sách sản phẩm ngay lập tức!</p>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">
+                            <i data-lucide="history" class="w-4 h-4 text-orange-600"></i> Danh Sách Bản Sao Lưu Tự Động (${backups.length})
+                        </h3>
+                        <button onclick="manualCreateBackupPrompt()" class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded font-bold text-xs flex items-center gap-1 shadow-sm">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Tạo Điểm Sao Lưu Mới
+                        </button>
+                    </div>
+
+                    <div class="space-y-3 max-h-[50vh] overflow-y-auto">
+                        ${backups.length > 0 ? backupCards : `
+                            <div class="bg-white p-8 rounded-xl border text-center text-gray-400">
+                                <i data-lucide="archive" class="w-10 h-10 mx-auto mb-2 opacity-50"></i>
+                                <p>Chưa có bản sao lưu nào. Hãy bấm "Tạo Điểm Sao Lưu Mới" để tạo ngay.</p>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        async function renderDiagServerTab(container) {
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">
+                            <i data-lucide="activity" class="w-4 h-4 text-blue-600"></i> Nhật Ký Request Máy Chủ (/api/logs)
+                        </h3>
+                        <button onclick="renderDiagServerTab(document.getElementById('diag-tab-content'))" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-xs font-bold flex items-center gap-1 transition-colors border border-blue-200">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Làm Mới
+                        </button>
+                    </div>
+                    <div id="server-logs-container" class="bg-white rounded-lg border shadow-sm p-4 text-xs font-mono max-h-[55vh] overflow-y-auto">
+                        <div class="text-gray-400 flex items-center gap-2">
+                            <i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Đang tải nhật ký từ máy chủ...
+                        </div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+
+            try {
+                const response = await fetch('/api/logs');
+                if (response.ok) {
+                    const serverLogs = await response.json();
+                    const logBox = document.getElementById('server-logs-container');
+                    if (logBox) {
+                        if (serverLogs && serverLogs.length > 0) {
+                            logBox.innerHTML = serverLogs.map(sl => `
+                                <div class="p-2 border-b last:border-b-0 hover:bg-gray-50 flex justify-between items-start gap-4">
+                                    <div>
+                                        <span class="text-blue-600 font-bold">[${sl.timestamp || sl.date || new Date().toISOString()}]</span>
+                                        <span class="text-orange-600 font-bold ml-1">${sl.action || sl.type || 'LOG'}</span>:
+                                        <span class="text-gray-800">${sl.message || sl.summary || ''}</span>
+                                        ${sl.details ? `<pre class="text-[10px] text-gray-500 mt-1">${JSON.stringify(sl.details, null, 2)}</pre>` : ''}
+                                    </div>
+                                    <span class="text-[10px] text-gray-400 whitespace-nowrap">${sl.count !== undefined ? `${sl.count} SP` : ''}</span>
+                                </div>
+                            `).join('');
+                        } else {
+                            logBox.innerHTML = '<div class="text-gray-400 text-center py-4">Chưa có nhật ký ghi nhận trên máy chủ</div>';
+                        }
+                    }
+                } else {
+                    const logBox = document.getElementById('server-logs-container');
+                    if (logBox) logBox.innerHTML = '<div class="text-red-500">Không thể lấy nhật ký từ /api/logs (HTTP ' + response.status + ')</div>';
+                }
+            } catch(e) {
+                const logBox = document.getElementById('server-logs-container');
+                if (logBox) logBox.innerHTML = '<div class="text-red-500">Lỗi kết nối máy chủ: ' + e.message + '</div>';
+            }
+        }
+
+        function manualCreateBackupPrompt() {
+            if (database.length === 0) {
+                showToast('Kho dữ liệu đang trống, không thể tạo sao lưu!', 'warning');
+                return;
+            }
+            const reason = prompt('Nhập ghi chú cho bản sao lưu này (hoặc để trống):', `Sao lưu thủ công lúc ${new Date().toLocaleTimeString('vi-VN')}`);
+            if (reason !== null) {
+                const backup = backupManager.createBackup(reason || 'Sao lưu thủ công', database);
+                if (backup) {
+                    activityLogger.log('MANUAL_BACKUP', `Người dùng đã tạo bản sao lưu thủ công (${backup.count} SP): ${backup.reason}`);
+                    showToast(`Đã tạo bản sao lưu ${backup.count} sản phẩm thành công!`, 'success');
+                    if (window.currentDiagTab) {
+                        renderDiagnosticsTab(window.currentDiagTab);
+                    }
+                }
+            }
+        }
+
+        // --- 3. STORAGE & SYNC UTILS ---
         function saveSystemState(emit = true, syncData = true) {
             // Save Data
             localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(database));
@@ -937,8 +1543,8 @@
                 globalPromoName,
                 globalDate,
                 // NEW: SAVE API KEY
-                apiKey: document.getElementById('inp-api-key').value,
-                gasUrl: document.getElementById('inp-gas-url').value
+                apiKey: document.getElementById('inp-api-key')?.value || '',
+                gasUrl: document.getElementById('inp-gas-url')?.value || ''
             };
             localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
 
@@ -963,8 +1569,8 @@
                 socket.emit('database_changed', { database: database });
             }
 
-            // Sync to Cloud in background
-            if (syncData) {
+            // Sync to Cloud in background if data actually changed
+            if (syncData && isInitialLoadComplete) {
                 syncToCloud();
             }
         }
@@ -984,12 +1590,12 @@
                 showToast('Vui lòng dán link Google Apps Script vào cột cấu hình bên trái trước!', 'error');
                 return;
             }
-            showToast('Đang đồng bộ...', 'info');
+            showToast('Đang đồng bộ lên Cloud...', 'info');
             const success = await performSync();
             if (success) {
                 showToast('Đã đồng bộ lên Google Sheets', 'success');
             } else {
-                showToast('Lỗi đồng bộ dữ liệu', 'error');
+                showToast('Lỗi đồng bộ dữ liệu lên Google Sheets', 'error');
             }
         }
 
@@ -1005,55 +1611,95 @@
             const gasUrl = document.getElementById('inp-gas-url')?.value || '';
             if (!gasUrl) return false;
 
-            // SAFEGUARD: Ngăn chặn việc vô tình đồng bộ mảng rỗng làm xóa trắng Google Sheets
+            // SAFEGUARD 1: Do not sync while initial load hasn't completed
+            if (!isInitialLoadComplete) {
+                console.log('Chưa hoàn tất tải dữ liệu ban đầu, hoãn đồng bộ.');
+                return false;
+            }
+
+            // SAFEGUARD 2: Ngăn chặn việc vô tình đồng bộ mảng rỗng làm xóa trắng Google Sheets
             if (database.length === 0) {
                 console.warn('Bảo vệ dữ liệu: Không đồng bộ mảng rỗng lên Google Sheets.');
+                activityLogger.log('WARN_PROTECTION', 'Đã chặn đồng bộ mảng rỗng (0 sản phẩm) lên Google Sheets để tránh làm mất dữ liệu.', {
+                    currentCount: 0
+                });
                 return false;
             }
 
             try {
+                // Auto snapshot before cloud push
+                backupManager.createBackup(`Tự động trước khi đẩy Cloud (${database.length} SP)`, database);
+
                 const response = await fetch('/api/products/sync', {
                     method: 'POST',
                     headers: getGasHeaders(),
                     body: JSON.stringify({ products: database })
                 });
-                if (!response.ok) throw new Error('Sync failed');
+                if (!response.ok) throw new Error('Sync failed with HTTP ' + response.status);
+                const resJson = await response.json().catch(() => ({}));
+                
+                activityLogger.log('CLOUD_PUSH', `Đã đồng bộ thành công ${database.length} SP lên Google Sheets`, {
+                    productCount: database.length,
+                    serverMessage: resJson.message || 'OK'
+                }, database.length, database.length);
+
                 console.log('Đã đồng bộ lên Google Sheets');
                 return true;
             } catch (error) {
                 console.error('Lỗi đồng bộ:', error);
+                activityLogger.log('ERROR', `Lỗi khi đẩy đồng bộ lên Google Sheets: ${error.message}`, {
+                    error: String(error)
+                });
                 return false;
             }
         }
 
         async function handleGasUrlChange() {
             updatePrintSettings(); // Save settings
-            const gasUrl = document.getElementById('inp-gas-url').value.trim();
+            const gasUrl = document.getElementById('inp-gas-url')?.value?.trim() || '';
             if (gasUrl) {
-                showToast('Đang tải dữ liệu từ Cloud...', 'info');
+                showToast('Đang tải dữ liệu từ Google Sheets...', 'info');
                 try {
                     const response = await fetch('/api/products', { headers: getGasHeaders() });
                     if (response.ok) {
                         const cloudData = await response.json();
-                        if (cloudData && cloudData.length > 0) {
-                            database = cloudData.map(p => ({
+                        if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
+                            const mappedCloud = cloudData.map(p => ({
                                 ...p,
+                                price: cleanPrice(p.price || 0),
+                                salePrice: cleanPrice(p.salePrice || 0),
                                 specs: typeof p.specs === 'string' ? JSON.parse(p.specs || '[]') : (p.specs || []),
-                                isGiftPromo: p.isGiftPromo === 'true' || p.isGiftPromo === true
+                                isGiftPromo: p.isGiftPromo === 'true' || p.isGiftPromo === true || p.isGiftPromo === 1
                             }));
+
+                            // Snapshot if local database had items
+                            if (database.length > 0) {
+                                backupManager.createBackup(`Trước khi Tải từ Cloud (${database.length} SP -> ${mappedCloud.length} SP)`, database);
+                            }
+
+                            const prevCount = database.length;
+                            database = mappedCloud;
                             localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(database));
-                            showToast('Đã tải dữ liệu từ Google Sheets', 'success');
+                            activityLogger.log('CLOUD_PULL', `Đã tải ${database.length} sản phẩm từ Google Sheets (Người dùng chủ động tải)`, {
+                                countBefore: prevCount,
+                                countAfter: database.length
+                            }, prevCount, database.length);
+
+                            showToast(`Đã tải thành công ${database.length} sản phẩm từ Google Sheets`, 'success');
                             renderTable();
                             renderPrintArea();
                         } else {
-                            showToast('Google Sheets hiện đang trống.', 'info');
+                            showToast('Google Sheets hiện đang trống (0 sản phẩm).', 'info');
+                            activityLogger.log('WARN_PROTECTION', 'Tải từ Google Sheets trả về danh sách rỗng. Giữ nguyên dữ liệu cục bộ.');
                         }
                     } else {
-                        showToast('Lỗi kết nối Google Sheets', 'error');
+                        showToast('Lỗi kết nối Google Sheets (Vui lòng kiểm tra link Apps Script)', 'error');
+                        activityLogger.log('ERROR', 'Lỗi HTTP khi kết nối Google Sheets: ' + response.status);
                     }
                 } catch (error) {
                     console.error('Lỗi tải từ Cloud:', error);
-                    showToast('Lỗi tải dữ liệu từ Cloud', 'error');
+                    showToast('Lỗi tải dữ liệu từ Cloud: ' + error.message, 'error');
+                    activityLogger.log('ERROR', 'Lỗi tải từ Cloud: ' + error.message);
                 }
             } else {
                 showToast('Vui lòng dán link Google Apps Script vào cột cấu hình bên trái trước!', 'error');
@@ -1061,6 +1707,7 @@
         }
 
         async function loadSystemState() {
+            isInitialLoadComplete = false;
             // Load Settings First
             const savedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
             if (savedSettings) {
@@ -1078,7 +1725,7 @@
                     if (settings.globalPromoName !== undefined) globalPromoName = settings.globalPromoName;
                     if (settings.globalDate !== undefined) globalDate = settings.globalDate;
                     
-                    // NEW: LOAD API KEY
+                    // LOAD API KEY & GAS URL
                     if (settings.apiKey) document.getElementById('inp-api-key').value = settings.apiKey;
                     if (settings.gasUrl) document.getElementById('inp-gas-url').value = settings.gasUrl;
                     
@@ -1107,37 +1754,63 @@
                 } catch(e) { console.error('Error loading Settings', e); }
             }
 
-            // Load Data from Cloud
-            try {
-                const response = await fetch('/api/products', { headers: getGasHeaders() });
-                if (response.ok) {
-                    const cloudData = await response.json();
-                    if (cloudData && cloudData.length > 0) {
-                        database = cloudData.map(p => ({
-                            ...p,
-                            price: cleanPrice(p.price || 0),
-                            salePrice: cleanPrice(p.salePrice || 0),
-                            specs: typeof p.specs === 'string' ? JSON.parse(p.specs || '[]') : (p.specs || []),
-                            isGiftPromo: p.isGiftPromo === 'true' || p.isGiftPromo === true || p.isGiftPromo === 1
-                        }));
-                        localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(database));
-                        console.log('Đã tải dữ liệu từ Google Sheets');
+            activityLogger.updateBadge();
+
+            // 1. Load Local Database first as instant fallback
+            loadLocalDatabase();
+
+            // 2. Load Data from Cloud if gasUrl configured
+            const gasUrl = document.getElementById('inp-gas-url')?.value?.trim() || '';
+            if (gasUrl) {
+                try {
+                    const response = await fetch('/api/products', { headers: getGasHeaders() });
+                    if (response.ok) {
+                        const cloudData = await response.json();
+                        if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
+                            const mappedCloud = cloudData.map(p => ({
+                                ...p,
+                                price: cleanPrice(p.price || 0),
+                                salePrice: cleanPrice(p.salePrice || 0),
+                                specs: typeof p.specs === 'string' ? JSON.parse(p.specs || '[]') : (p.specs || []),
+                                isGiftPromo: p.isGiftPromo === 'true' || p.isGiftPromo === true || p.isGiftPromo === 1
+                            }));
+
+                            // SAFEGUARD: If local database has more items than cloud, auto snapshot first!
+                            if (database.length > 0 && mappedCloud.length < database.length) {
+                                backupManager.createBackup(`Trước khi cập nhật từ Cloud (${database.length} SP local -> ${mappedCloud.length} SP cloud)`, database);
+                                activityLogger.log('WARN_PROTECTION', `Google Sheets có ít SP hơn bộ nhớ máy (${mappedCloud.length} < ${database.length}). Đã tự động tạo bản sao lưu dữ liệu máy trước khi nhận Cloud.`, {
+                                    localCount: database.length,
+                                    cloudCount: mappedCloud.length
+                                }, database.length, mappedCloud.length);
+                            }
+
+                            const prevCount = database.length;
+                            database = mappedCloud;
+                            localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(database));
+                            activityLogger.log('CLOUD_PULL', `Đã tải ${database.length} sản phẩm từ Google Sheets khi khởi động`, {
+                                count: database.length
+                            }, prevCount, database.length);
+                            console.log(`Đã tải ${database.length} sản phẩm từ Google Sheets`);
+                        } else if (cloudData && Array.isArray(cloudData) && cloudData.length === 0) {
+                            activityLogger.log('WARN_PROTECTION', 'Google Sheets hiện đang trả về 0 sản phẩm khi khởi động. Giữ nguyên dữ liệu cục bộ.', {
+                                localCount: database.length
+                            });
+                        }
                     } else {
-                        loadLocalDatabase();
+                        activityLogger.log('ERROR', `Không thể tải dữ liệu từ Google Sheets (HTTP ${response.status}). Sử dụng dữ liệu cục bộ.`);
                     }
-                } else {
-                    loadLocalDatabase();
+                } catch (error) {
+                    console.error('Lỗi tải từ Cloud, dùng dữ liệu Local:', error);
+                    activityLogger.log('ERROR', `Lỗi tải từ Cloud: ${error.message}. Sử dụng dữ liệu cục bộ.`);
                 }
-            } catch (error) {
-                console.error('Lỗi tải từ Cloud, dùng dữ liệu Local:', error);
-                loadLocalDatabase();
             }
 
             // MIGRATION logic
             database.forEach(p => {
-                if (p.code.toLowerCase().startsWith('p.')) {
-                    const hasCPU = p.specs.some(s => s.label === 'Đầu nối CPU');
+                if (p.code && p.code.toLowerCase().startsWith('p.')) {
+                    const hasCPU = p.specs && p.specs.some(s => s.label === 'Đầu nối CPU');
                     if (!hasCPU) {
+                        if (!p.specs) p.specs = [];
                         const mainIndex = p.specs.findIndex(s => s.label === 'Đầu nối Main');
                         const cpuSpec = {label:'Đầu nối CPU',icon:'cpu',default:'1x 8pin', value: '', placeholder: '1x 8pin'};
                         if (mainIndex !== -1) {
@@ -1149,6 +1822,7 @@
                 }
             });
 
+            isInitialLoadComplete = true;
             renderTable();
             renderPrintArea();
         }
@@ -1550,20 +2224,32 @@
         }
 
         function clearAllData() {
-            if(confirm("Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu? Hành động này không thể hoàn tác.")) {
+            if (database.length === 0) {
+                showToast("Kho dữ liệu hiện đang trống", "info");
+                return;
+            }
+            if(confirm(`Bạn có chắc chắn muốn xóa TOÀN BỘ ${database.length} sản phẩm? Hệ thống sẽ tự động sao lưu trước khi xóa.`)) {
+                backupManager.createBackup(`Trước khi xóa toàn bộ (${database.length} SP)`, database);
+                const prevCount = database.length;
                 database = [];
                 selectedIds.clear();
                 excludedCampaignIds.clear();
                 saveSystemState();
                 displayLimit = 100;
                 renderTable();
-                showToast("Đã xóa toàn bộ dữ liệu", "success");
+                renderPrintArea();
+                activityLogger.log('CLEAR_ALL', `Đã xóa toàn bộ kho dữ liệu (${prevCount} SP)`, {
+                    countBefore: prevCount,
+                    countAfter: 0
+                }, prevCount, 0);
+                showToast("Đã xóa toàn bộ dữ liệu (Có thể khôi phục trong mục Nhật Ký)", "success");
             }
         }
 
         // YÊU CẦU 2: Xóa tất cả thông tin khuyến mãi
         function clearAllCampaignInfo() {
             if(confirm("Bạn có chắc chắn muốn xóa TẤT CẢ giá khuyến mãi và tên CTKM của toàn bộ sản phẩm trong kho dữ liệu?")) {
+                backupManager.createBackup(`Trước khi xóa thông tin CTKM (${database.length} SP)`, database);
                 let count = 0;
                 database.forEach(p => {
                     if (p.salePrice || p.campaignName || p.isGiftPromo || p.giftName) {
@@ -1580,6 +2266,9 @@
                     saveSystemState();
                     renderTable();
                     renderPrintArea();
+                    activityLogger.log('CLEAR_CAMPAIGN', `Đã xóa thông tin khuyến mãi của ${count} sản phẩm`, {
+                        affectedCount: count
+                    });
                     showToast(`Đã xóa thông tin khuyến mãi của ${count} sản phẩm`, "success");
                 } else {
                     showToast("Không có sản phẩm nào đang có thông tin khuyến mãi", "info");
@@ -2269,13 +2958,20 @@
                 }
             }
             
-            saveSystemState();
-            renderTable();
-            closeModal();
-
             if (updatedCount > 0) {
+                backupManager.createBackup(`Trước khi cập nhật thông tin hàng loạt (${updatedCount} SP)`, database);
+                saveSystemState();
+                renderTable();
+                activityLogger.log('BULK_UPDATE_INFO', `Đã cập nhật thông tin cho ${updatedCount} sản phẩm`, {
+                    updatedCount: updatedCount,
+                    totalCodes: codes.length
+                });
                 showToast(`Đã cập nhật thông tin cho ${updatedCount} sản phẩm!`, 'success');
+            } else {
+                saveSystemState();
+                renderTable();
             }
+            closeModal();
             
             if (notFoundCodes.length > 0) {
                 setTimeout(() => {
@@ -2356,13 +3052,20 @@
                 }
             }
 
-            saveSystemState();
-            renderTable();
-            closeModal();
-
             if (updatedCount > 0) {
+                backupManager.createBackup(`Trước khi cập nhật giá Sale (${updatedCount} SP)`, database);
+                saveSystemState();
+                renderTable();
+                activityLogger.log('BULK_UPDATE_SALE', `Đã cập nhật giá Sale cho ${updatedCount} sản phẩm`, {
+                    updatedCount: updatedCount,
+                    totalCodes: codes.length
+                });
                 showToast(`Đã cập nhật giá SALE cho ${updatedCount} sản phẩm!`, 'success');
+            } else {
+                saveSystemState();
+                renderTable();
             }
+            closeModal();
             
             if (notFoundCodes.length > 0) {
                 setTimeout(() => {
@@ -2384,6 +3087,7 @@
             const p = database.find(x => x.id === id);
             if (!p) return;
 
+            const oldCode = p.code;
             p.code = document.getElementById('edit-code').value;
             p.name = document.getElementById('edit-name').value;
             p.warranty = document.getElementById('edit-warranty').value;
@@ -2430,18 +3134,26 @@
             saveSystemState(); 
             renderTable();
             renderPrintArea(); 
-            showToast('Đã lưu thay đổi');
+            activityLogger.log('EDIT_PRODUCT', `Đã chỉnh sửa thông tin sản phẩm: ${p.code}`, {
+                code: p.code,
+                name: p.name,
+                price: p.price,
+                salePrice: p.salePrice
+            });
+            showToast('Đã lưu thay đổi', 'success');
         }
 
         function deleteProduct(id) {
+            const target = database.find(p => p.id === id);
             const html = `
                 <div class="p-6 text-center">
                     <i data-lucide="alert-triangle" class="w-12 h-12 text-yellow-500 mx-auto mb-4"></i>
                     <h3 class="text-lg font-bold text-gray-800 mb-2">Xác nhận xóa?</h3>
-                    <p class="text-gray-600 mb-6">Hành động này không thể hoàn tác.</p>
+                    <p class="text-gray-600 mb-2 font-bold text-red-600">${target ? target.code : 'Sản phẩm'}</p>
+                    <p class="text-gray-500 text-sm mb-6">Bạn có thể khôi phục lại bất kỳ lúc nào trong mục <strong>Nhật Ký & Khôi Phục</strong>.</p>
                     <div class="flex justify-center gap-3">
-                        <button onclick="closeModal()" class="px-4 py-2 bg-gray-200 rounded font-bold">Hủy</button>
-                        <button onclick="performDelete('${id}')" class="px-4 py-2 bg-red-600 text-white rounded font-bold">Xóa ngay</button>
+                        <button onclick="closeModal()" class="px-4 py-2 bg-gray-200 rounded font-bold hover:bg-gray-300">Hủy</button>
+                        <button onclick="performDelete('${id}')" class="px-4 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700 shadow">Xóa ngay</button>
                     </div>
                 </div>
             `;
@@ -2449,12 +3161,26 @@
         }
 
         function performDelete(id) {
+            const target = database.find(p => p.id === id);
+            const prevCount = database.length;
+            if (target) {
+                backupManager.createBackup(`Trước khi xóa SP ${target.code}`, database);
+                deletedProductIds.add(target.code);
+                saveDeletedProductIds();
+                activityLogger.log('DELETE_PRODUCT', `Đã xóa sản phẩm: ${target.code} (${target.name || 'Không tên'})`, {
+                    id: target.id,
+                    code: target.code,
+                    name: target.name,
+                    price: target.price
+                }, prevCount, prevCount - 1);
+            }
             database = database.filter(p => p.id !== id);
             selectedIds.delete(id);
             closeModal();
             saveSystemState(); 
             renderTable();
-            showToast('Đã tống cổ sản phẩm khỏi trí nhớ', 'success');
+            renderPrintArea();
+            showToast('Đã xóa sản phẩm thành công', 'success');
         }
 
         // --- 7. IMPORT/EXPORT ---
@@ -2469,7 +3195,6 @@
             // CÁCH MỚI (CHÍNH XÁC 100%): So sánh tuyệt đối
             if (database.some(p => String(p.code).trim().toLowerCase() === code.toLowerCase())) {
                 showToast(`Mã sản phẩm "${code}" đã tồn tại trong hệ thống!`, 'error');
-                // Optional: Highlight the input
                 codeInput.classList.add('border-red-500', 'focus:ring-red-500');
                 setTimeout(() => codeInput.classList.remove('border-red-500', 'focus:ring-red-500'), 2000);
                 return;
@@ -2486,13 +3211,20 @@
                 base.warranty = document.getElementById('inp-warranty').value.trim();
             }
             
+            const prevCount = database.length;
             database.unshift(base);
             selectedIds.add(base.id);
             
             document.getElementById('add-form').reset();
             saveSystemState(); 
             renderTable();
-            showToast('Đã thêm sản phẩm mới');
+            renderPrintArea();
+            activityLogger.log('ADD_PRODUCT', `Đã thêm sản phẩm mới: ${base.code}`, {
+                code: base.code,
+                name: base.name,
+                price: base.price
+            }, prevCount, database.length);
+            showToast('Đã thêm sản phẩm mới', 'success');
         });
 
         function toggleBulkImport() {
@@ -2615,7 +3347,16 @@
             updateLineCounts();
 
             toggleBulkImport();
-            saveSystemState(); 
+            if (addedCount > 0) {
+                backupManager.createBackup(`Trước khi nhập hàng loạt (${addedCount} SP mới)`, database);
+                saveSystemState(); 
+                activityLogger.log('BULK_IMPORT', `Đã nhập hàng loạt ${addedCount} sản phẩm`, {
+                    addedCount: addedCount,
+                    totalCodes: codes.length
+                });
+            } else {
+                saveSystemState();
+            }
             displayLimit = 100;
             renderTable();
 
@@ -2634,6 +3375,7 @@
             link.href = url;
             link.download = `printstar_data_${new Date().toISOString().slice(0,10)}.json`;
             link.click();
+            activityLogger.log('EXPORT_JSON', `Đã xuất file JSON dữ liệu (${database.length} SP)`);
             showToast('Đã tải xuống file dữ liệu');
         }
 
@@ -2697,9 +3439,14 @@
                             lucide.createIcons();
                         } else {
                             // No duplicates, just import
+                            backupManager.createBackup(`Trước khi nhập file JSON (${json.length} SP mới)`, database);
+                            const prevCount = database.length;
                             database = [...json, ...database];
                             saveSystemState(); 
                             renderTable();
+                            activityLogger.log('IMPORT_JSON', `Đã nhập ${json.length} sản phẩm từ file JSON`, {
+                                importedCount: json.length
+                            }, prevCount, database.length);
                             showToast(`Đã nhập ${json.length} sản phẩm từ file`);
                         }
                     }
@@ -2715,21 +3462,27 @@
             if (!window.pendingImportData) return;
             const json = window.pendingImportData;
             const newCodes = json.map(p => String(p.code).trim().toLowerCase());
+            const prevCount = database.length;
+
+            backupManager.createBackup(`Trước khi nhập file JSON (Hành động: ${action})`, database);
 
             if (action === 'replace') {
                 // Remove old duplicates
                 database = database.filter(p => !newCodes.includes(String(p.code).trim().toLowerCase()));
                 database = [...json, ...database];
+                activityLogger.log('IMPORT_JSON_REPLACE', `Đã ghi đè sản phẩm trùng và nhập ${json.length} sản phẩm từ file`, {}, prevCount, database.length);
                 showToast(`Đã ghi đè và nhập ${json.length} sản phẩm`);
             } else if (action === 'keep') {
                 // Filter out duplicates from incoming json
                 const existingCodes = database.map(p => String(p.code).trim().toLowerCase());
                 const filteredJson = json.filter(p => !existingCodes.includes(String(p.code).trim().toLowerCase()));
                 database = [...filteredJson, ...database];
+                activityLogger.log('IMPORT_JSON_KEEP', `Đã bỏ qua trùng và nhập ${filteredJson.length} sản phẩm từ file`, {}, prevCount, database.length);
                 showToast(`Đã nhập ${filteredJson.length} sản phẩm mới (bỏ qua trùng)`);
             } else if (action === 'both') {
                 // Just append all
                 database = [...json, ...database];
+                activityLogger.log('IMPORT_JSON_BOTH', `Đã nhập ${json.length} sản phẩm (giữ cả trùng lặp)`, {}, prevCount, database.length);
                 showToast(`Đã nhập ${json.length} sản phẩm (giữ cả trùng lặp)`);
             }
 
@@ -3318,6 +4071,13 @@
         window.toggleGiftPromoEdit = toggleGiftPromoEdit;
         window.loadMoreResults = loadMoreResults;
         window.debouncedRenderTable = debouncedRenderTable;
+        window.openDiagnosticsModal = openDiagnosticsModal;
+        window.switchDiagTab = switchDiagTab;
+        window.renderDiagnosticsTab = renderDiagnosticsTab;
+        window.renderDiagServerTab = renderDiagServerTab;
+        window.manualCreateBackupPrompt = manualCreateBackupPrompt;
+        window.activityLogger = activityLogger;
+        window.backupManager = backupManager;
 
     </script>
 <script type="module" src="/index.tsx"></script>
